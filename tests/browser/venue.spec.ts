@@ -60,3 +60,36 @@ test('workspace works on desktop and mobile without horizontal overflow', async 
   );
   await page.screenshot({ path: '/tmp/openvenue-mobile.png', fullPage: true });
 });
+
+test('freezes edits and navigation until an in-flight layout save finishes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New venue' }).click();
+  await page.getByLabel('Venue name').fill(`Save race ${Date.now()}`);
+  await page.getByRole('button', { name: 'Create venue' }).click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  await page.getByRole('button', { name: 'Select Table 1', exact: true }).click();
+  await page.getByLabel('Resource label').fill('Safe label');
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/venues/*', async (route) => {
+    if (route.request().method() === 'PUT') {
+      await barrier;
+    }
+    await route.continue();
+  });
+  const request = page.waitForRequest((r) => r.method() === 'PUT');
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await request;
+  try {
+    await expect(page.locator('.shell')).toHaveAttribute('inert', '');
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await expect(page.getByRole('button', { name: 'Select Safe label', exact: true })).toBeVisible();
+});

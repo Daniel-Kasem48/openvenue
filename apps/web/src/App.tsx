@@ -288,7 +288,7 @@ export default function App() {
     setSelected(r.id);
   };
   return (
-    <div className="shell">
+    <div className="shell" inert={working} aria-busy={working}>
       <aside className="sidebar">
         <a href="/" className="brand">
           <span className="brand-symbol">◈</span> openvenue<span className="beta">BETA</span>

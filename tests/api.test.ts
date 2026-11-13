@@ -168,6 +168,28 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     expect(booked.status).toBe(201);
     expect((await booked.json()).start).toBe(interval.start);
   });
+  it('rejects concurrent attempts to attach the same new resource to different venues', async () => {
+    const first = await (
+      await request('/venues', { kind: 'restaurant', name: 'Concurrent first' }, true)
+    ).json();
+    const second = await (
+      await request('/venues', { kind: 'restaurant', name: 'Concurrent second' }, true)
+    ).json();
+    const sharedId = crypto.randomUUID();
+    for (const v of [first, second])
+      v.layout.floors[0].resources.push({ ...v.layout.floors[0].resources[0], id: sharedId });
+    const results = await Promise.all(
+      [first, second].map((v) =>
+        request(
+          `/venues/${v.id}`,
+          { layout: v.layout, name: v.name, revision: v.revision },
+          true,
+          'PUT',
+        ),
+      ),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+  });
   it('persists data in PostgreSQL', async () => {
     const result = await pool.query('SELECT name FROM venues WHERE id=$1', [venue.id]);
     expect(result.rows[0].name).toBe(venue.name);

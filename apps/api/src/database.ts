@@ -16,11 +16,16 @@ export async function syncResources(client: PoolClient, venueId: string, layout:
     venueId,
     ids,
   ]);
-  for (const r of resources)
-    await client.query(
-      'INSERT INTO resources(id,venue_id,label) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET label=EXCLUDED.label',
+  for (const r of resources) {
+    const result = await client.query(
+      'INSERT INTO resources(id,venue_id,label) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET label=EXCLUDED.label WHERE resources.venue_id=EXCLUDED.venue_id RETURNING id',
       [r.id, venueId, r.label],
     );
+    if (!result.rowCount)
+      throw Object.assign(new Error('Resource identifiers belong to another venue'), {
+        status: 409,
+      });
+  }
 }
 export async function transaction<T>(
   pool: Pool,

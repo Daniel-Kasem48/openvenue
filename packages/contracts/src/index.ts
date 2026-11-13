@@ -1,9 +1,10 @@
 import { z } from 'zod';
+const uuid = z.uuid().transform((value) => value.toLowerCase());
 export const kindSchema = z.enum(['restaurant', 'parking', 'cinema']);
 export type VenueKind = z.infer<typeof kindSchema>;
 const name = z.string().trim().min(1).max(100);
 export const resourceSchema = z.object({
-  id: z.uuid(),
+  id: uuid,
   label: name,
   kind: z.enum(['table', 'space', 'seat']),
   x: z.number().min(0).max(200),
@@ -17,7 +18,7 @@ export const resourceSchema = z.object({
 });
 export type Resource = z.infer<typeof resourceSchema>;
 export const floorSchema = z.object({
-  id: z.uuid(),
+  id: uuid,
   name,
   width: z.number().min(5).max(200),
   depth: z.number().min(5).max(200),
@@ -66,7 +67,7 @@ export type Booking = {
 export const createVenueSchema = z.object({
   name,
   kind: kindSchema,
-  sourceId: z.uuid().optional(),
+  sourceId: uuid.optional(),
 });
 export const saveVenueSchema = z.object({
   name,
@@ -82,11 +83,11 @@ export const intervalSchema = z
     { message: 'Choose a positive interval of at most seven days' },
   );
 export const bookingSchema = z.object({
-  venueId: z.uuid(),
-  resourceId: z.uuid(),
+  venueId: uuid,
+  resourceId: uuid,
   guestName: name,
   start: z.iso.datetime({ offset: true }).optional(),
   end: z.iso.datetime({ offset: true }).optional(),
-  showId: z.uuid().optional(),
+  showId: uuid.optional(),
 });
 export { makeTemplate, cloneLayout } from './templates';

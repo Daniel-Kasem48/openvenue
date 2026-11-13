@@ -26,3 +26,13 @@ describe('venue templates and layout boundary', () => {
     expect(layoutSchema.safeParse(map).success).toBe(false);
   });
 });
+
+it('normalizes UUID case before checking uniqueness', () => {
+  const layout = makeTemplate('restaurant');
+  const id = layout.floors[0].resources[0].id;
+  layout.floors[0].resources[0].id = id.toUpperCase();
+  const parsed = layoutSchema.parse(layout);
+  expect(parsed.floors[0].resources[0].id).toBe(id.toLowerCase());
+  layout.floors[0].resources.push({ ...layout.floors[0].resources[0], id: id.toLowerCase() });
+  expect(layoutSchema.safeParse(layout).success).toBe(false);
+});
