@@ -1425,3 +1425,12 @@ dialog select {
     justify-content: flex-start;
   }
 }
+
+.three-stage:not(.cinema-stage) .map-scale {
+  color: #637560;
+}
+.three-stage .map-scale {
+  font-size: 10px;
+  line-height: 1.5;
+  max-width: calc(100% - 165px);
+}

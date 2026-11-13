@@ -412,3 +412,93 @@ test('camera presets and touch gestures change the 3D viewpoint', async ({ page,
   await expect.poll(async () => !(await canvas.screenshot()).equals(start)).toBe(true);
   await page.getByRole('button', { name: 'Reset 3D camera' }).click();
 });
+
+test('selection and review preserve a manually panned and zoomed camera', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90000);
+  // Observe the actual GPU view matrix without adding test state to the application.
+  await page.addInitScript(() => {
+    const locations = new WeakMap<WebGLUniformLocation, string>();
+    const proto = WebGL2RenderingContext.prototype;
+    const get = proto.getUniformLocation,
+      set = proto.uniformMatrix4fv;
+    proto.getUniformLocation = function (program, name) {
+      const location = get.call(this, program, name);
+      if (location) locations.set(location, name);
+      return location;
+    };
+    proto.uniformMatrix4fv = function (location, transpose, data, ...rest) {
+      if (location && locations.get(location) === 'viewMatrix')
+        (window as any).__cameraView = Array.from(data as Iterable<number>);
+      return (set as any).call(this, location, transpose, data, ...rest);
+    };
+  });
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Camera selection ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { name, kind: 'parking' } })
+  ).json();
+  venue.layout.floors = venue.layout.floors.slice(0, 1);
+  venue.layout.floors[0].objects = [];
+  venue.layout.floors[0].resources = venue.layout.floors[0].resources.slice(0, 2);
+  expect(
+    (
+      await request.put(`/api/venues/${venue.id}`, {
+        data: { name, layout: venue.layout, revision: venue.revision },
+      })
+    ).ok(),
+  ).toBe(true);
+  await page.goto('/');
+  await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  await expect(page.locator('.map-scale')).toContainText('Ctrl + drag to pan');
+  const canvas = page.locator('canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => (window as any).__cameraView?.length)).toBe(16);
+  await page.waitForTimeout(600);
+  const initial = await page.evaluate(() => (window as any).__cameraView);
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down('Control');
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 30, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+  await page.mouse.wheel(0, -120);
+  await page.waitForTimeout(1200);
+  let previousPose = '';
+  await expect
+    .poll(
+      async () => {
+        const next = JSON.stringify(await page.evaluate(() => (window as any).__cameraView));
+        const stable = next === previousPose;
+        previousPose = next;
+        return stable;
+      },
+      { timeout: 10000, intervals: [200] },
+    )
+    .toBe(true);
+  // OrbitControls retains sub-centimetre pan damping when new frames are requested.
+  const pose = await page.evaluate(() => (window as any).__cameraView);
+  expect(pose).not.toEqual(initial);
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption(venue.layout.floors[0].resources[0].id);
+  // A longer selection summary expands the adjacent panel and resizes the canvas.
+  await page.locator('.inspector').evaluate((el) => {
+    el.style.minHeight = '950px';
+  });
+  await page.waitForTimeout(700);
+  (await page.evaluate(() => (window as any).__cameraView)).forEach((value: number, i: number) =>
+    expect(Math.abs(value - pose[i])).toBeLessThan(i < 12 ? 0.0001 : 0.02),
+  );
+  await page.getByRole('button', { name: 'Review reservation' }).click();
+  await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'Change place' }).click();
+  await page.waitForTimeout(700);
+  (await page.evaluate(() => (window as any).__cameraView)).forEach((value: number, i: number) =>
+    expect(Math.abs(value - pose[i])).toBeLessThan(i < 12 ? 0.0001 : 0.02),
+  );
+});

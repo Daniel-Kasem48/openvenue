@@ -160,7 +160,7 @@ export default function Map3D({
           shadow-bias={-0.0005}
         />
         <Suspense fallback={null}>
-          <Bounds fit clip observe margin={1.15} maxDuration={0.35}>
+          <Bounds fit clip margin={1.15} maxDuration={0.35}>
             <FitCamera revision={cameraRevision} viewpoint={viewpoint} />
             <group>
               <mesh receiveShadow position={[0, -0.15, 0]}>
@@ -264,7 +264,9 @@ export default function Map3D({
       >
         ↺ Reset view
       </button>
-      <span className="map-scale">Drag to orbit · Right-drag to pan · Pinch or scroll to zoom</span>
+      <span className="map-scale">
+        <kbd>Ctrl</kbd> + drag to pan · Drag to rotate · Pinch/scroll to zoom
+      </span>
     </div>
   );
 }
