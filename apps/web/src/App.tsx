@@ -810,7 +810,7 @@ export default function App() {
             </div>
           ) : (
             <section
-              className={`panel venue-panel ${!admin && step === 'review' ? 'review-panel' : ''}`}
+              className={`panel venue-panel ${editing ? 'layout-editor' : ''} ${!admin && step === 'review' ? 'review-panel' : ''}`}
             >
               <div className="panel-title">
                 <div className="venue-heading">
@@ -841,7 +841,7 @@ export default function App() {
                               }
                             }}
                           >
-                            Discard
+                            {dirty ? 'Discard changes' : 'Done editing'}
                           </button>
                           <button className="primary" disabled={working || !dirty} onClick={save}>
                             Save layout
@@ -976,6 +976,7 @@ export default function App() {
                 <aside className="inspector">
                   {editing ? (
                     <LayoutInspector
+                      view={view}
                       draft={draft!}
                       floor={floor}
                       floorIndex={floorIndex}

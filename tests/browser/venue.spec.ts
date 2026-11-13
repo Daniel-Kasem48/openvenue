@@ -284,7 +284,7 @@ test('stadium is editable data, supports seat counts and saves per-seat prices',
   await page.getByRole('button', { name: 'Edit layout' }).click();
   await page.getByRole('button', { name: 'Select Custom pitch', exact: true }).click();
   await expect(page.getByLabel('Object label')).toHaveValue('Custom pitch');
-  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click();
   await page.locator('.profile').click();
   await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
   await page.getByLabel('Number of seats').selectOption('2');
@@ -593,4 +593,48 @@ test('admin sign-in supports retry, hides dismissed credentials and opens manage
   await expect(page.getByRole('button', { name: 'Edit layout', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Manage your venues' })).toBeVisible();
+});
+
+test('layout studio keeps the canvas stable and finds editable items by name', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password', { exact: true }).fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New venue' }).click();
+  await page.getByLabel('Venue name').fill(`Editor UX ${Date.now()}`);
+  await page.getByRole('button', { name: 'Create venue' }).click();
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  const canvas = page.locator('.map-stage');
+  const before = await canvas.boundingBox();
+  await page.getByRole('button', { name: 'Select Table 1', exact: true }).click();
+  await expect(page.getByLabel('Resource label')).toBeInViewport();
+  await page.getByRole('button', { name: '+ plant', exact: true }).click();
+  await expect(page.getByLabel('Object label')).toBeInViewport();
+  await page.getByLabel('Object label').fill('Entrance fern');
+  expect((await canvas.boundingBox())!.height).toBe(before!.height);
+  await page.getByText(/Find an item ·/).click();
+  await page.getByLabel('Search items').fill('Table 1');
+  const picker = page.getByRole('combobox', { name: 'Scene item' });
+  const table = await picker
+    .locator('option')
+    .filter({ hasText: 'Table 1 · table' })
+    .getAttribute('value');
+  await picker.selectOption(table!);
+  await expect(page.getByLabel('Resource label')).toHaveValue('Table 1');
+  await page.getByText('Floor settings', { exact: true }).click();
+  await page.getByLabel('Floor name', { exact: true }).fill('Main dining room');
+  await page.getByText('Reservation pricing', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'Pricing mode' }).selectOption('uniform');
+  await page.getByLabel('Standard reservation price').fill('12');
+  await page.getByRole('button', { name: 'Save layout', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  await page.getByText('Floor settings', { exact: true }).click();
+  await expect(page.getByLabel('Floor name', { exact: true })).toHaveValue('Main dining room');
+  await page.screenshot({ path: '/tmp/openvenue-editor-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByText('Reservation pricing', { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('button', { name: 'Save layout', exact: true })).toBeInViewport();
+  await page.screenshot({ path: '/tmp/openvenue-editor-mobile.png', fullPage: true });
 });

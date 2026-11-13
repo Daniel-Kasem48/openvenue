@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   currencySchema,
   makeObject,
@@ -9,6 +10,7 @@ import {
   type Layout,
 } from '@openvenue/contracts';
 type Props = {
+  view: '2d' | '3d';
   draft: Venue;
   floor: Floor;
   floorIndex: number;
@@ -23,6 +25,7 @@ type Props = {
   importLayout: (file?: File) => Promise<void>;
 };
 export function LayoutInspector({
+  view,
   draft,
   floor,
   floorIndex,
@@ -36,6 +39,15 @@ export function LayoutInspector({
   exportLayout,
   importLayout,
 }: Props) {
+  const [search, setSearch] = useState('');
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.closest('aside')?.scrollTo({ top: 0 });
+  }, [selected]);
+  const items = [...floor.resources, ...floor.objects];
+  const matches = items.filter((item) =>
+    `${item.label} ${item.kind}`.toLowerCase().includes(search.toLowerCase()),
+  );
   const object = (floor.objects ?? []).find((o) => o.id === selected);
   const updateObjects = (objects: SceneObject[]) =>
     updateLayout({
@@ -63,162 +75,46 @@ export function LayoutInspector({
   return (
     <>
       <div className="eyebrow">LAYOUT STUDIO</div>
-      <h3>Make it your own.</h3>
-      <p className="muted">Select an item to edit. Drag it on the 2D map to move.</p>
-      <details className="object-library" open>
-        <summary>Reservation pricing</summary>
+      <h3>Edit your space</h3>
+      <p className="muted">
+        {view === '2d'
+          ? 'Drag items to move them. Drag empty space to pan.'
+          : 'Preview in 3D. Select an item to edit its properties; switch to 2D to drag it.'}
+      </p>
+      <details className="object-library">
+        <summary>Find an item · {items.length} on this floor</summary>
         <label>
-          Pricing mode
-          <select
-            value={draft.layout.pricing.mode}
-            onChange={(e) =>
-              updateLayout({
-                ...draft.layout,
-                pricing: {
-                  ...draft.layout.pricing,
-                  mode: e.target.value as Layout['pricing']['mode'],
-                },
-              })
-            }
-          >
-            <option value="free">Free reservations</option>
-            <option value="uniform">Same price for every place</option>
-            <option value="per-resource">Different price per seat / table / space</option>
+          Search items
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name or type…"
+          />
+        </label>
+        <label>
+          Scene item
+          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">Select an item</option>
+            {items
+              .filter(
+                (item) =>
+                  item.id === selected ||
+                  `${item.label} ${item.kind}`.toLowerCase().includes(search.toLowerCase()),
+              )
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label} · {item.kind}
+                </option>
+              ))}
           </select>
         </label>
-        {draft.layout.pricing.mode !== 'free' && (
-          <>
-            <label>
-              Currency
-              <select
-                value={draft.layout.pricing.currency}
-                onChange={(e) =>
-                  updateLayout({
-                    ...draft.layout,
-                    pricing: {
-                      ...draft.layout.pricing,
-                      currency: e.target.value as Layout['pricing']['currency'],
-                    },
-                  })
-                }
-              >
-                {currencySchema.options.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            {draft.layout.pricing.mode === 'uniform' && (
-              <label>
-                Standard reservation price
-                <input
-                  type="number"
-                  min="0"
-                  max="1000000"
-                  step="0.01"
-                  value={draft.layout.pricing.amount / 100}
-                  onChange={(e) =>
-                    updateLayout({
-                      ...draft.layout,
-                      pricing: {
-                        ...draft.layout.pricing,
-                        amount: Math.round(Number(e.target.value) * 100),
-                      },
-                    })
-                  }
-                />
-              </label>
-            )}
-            <p className="muted">
-              Per place, for the entire reservation. A table price covers the whole party. Payment
-              is not collected here.
-            </p>
-          </>
-        )}
+        {matches.length === 0 && <p className="muted">No matching items.</p>}
       </details>
-      <div className="editor-tools">
-        <button className="secondary" onClick={addResource}>
-          + Add resource
-        </button>
-        <button
-          className="text-button"
-          onClick={() => {
-            if (!draft || draft.layout.floors.length >= 10) return;
-            updateLayout({
-              ...draft.layout,
-              floors: [
-                ...draft.layout.floors,
-                {
-                  id: crypto.randomUUID(),
-                  name: `Floor ${draft.layout.floors.length + 1}`,
-                  width: floor.width,
-                  depth: floor.depth,
-                  resources: [],
-                  objects: [],
-                },
-              ],
-            });
-            setFloorIndex(draft.layout.floors.length);
-            setSelected('');
-          }}
-        >
-          + Add floor
-        </button>
-      </div>
-      <label>
-        Floor name
-        <input
-          value={floor.name}
-          onChange={(e) =>
-            updateLayout({
-              ...draft!.layout,
-              floors: draft!.layout.floors.map((f, i) =>
-                i === floorIndex ? { ...f, name: e.target.value } : f,
-              ),
-            })
-          }
-        />
-      </label>
-      <div className="field-grid">
-        {(['width', 'depth'] as const).map((key) => (
-          <label key={key}>
-            Floor {key}
-            <input
-              type="number"
-              min="5"
-              max="200"
-              value={floor[key]}
-              onChange={(e) =>
-                updateLayout({
-                  ...draft.layout,
-                  floors: draft.layout.floors.map((f, i) =>
-                    i === floorIndex ? { ...f, [key]: Number(e.target.value) } : f,
-                  ),
-                })
-              }
-            />
-          </label>
-        ))}
-      </div>
-      <details className="object-library" open>
-        <summary>Object library · {objectKinds.length} types</summary>
-        <div className="object-palette">
-          {objectKinds.map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => {
-                const o = makeObject(kind, floor.width / 2, floor.depth / 2);
-                o.width = Math.min(o.width, floor.width - 1);
-                o.depth = Math.min(o.depth, floor.depth - 1);
-                updateObjects([...(floor.objects ?? []), o]);
-                setSelected(o.id);
-              }}
-            >
-              + {kind}
-            </button>
-          ))}
-        </div>
-      </details>
+      <h4 ref={heading}>{object?.label ?? resource?.label ?? 'Nothing selected'}</h4>
+      {!object && !resource && (
+        <p className="muted">Click an item on the map, find it by name, or add one below.</p>
+      )}
       {object && (
         <div className="resource-editor">
           <label>
@@ -372,6 +268,163 @@ export function LayoutInspector({
           </button>
         </div>
       )}
+      <details className="object-library" open>
+        <summary>Object library · {objectKinds.length} types</summary>
+        <div className="object-palette">
+          {objectKinds.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                const o = makeObject(kind, floor.width / 2, floor.depth / 2);
+                o.width = Math.min(o.width, floor.width - 1);
+                o.depth = Math.min(o.depth, floor.depth - 1);
+                updateObjects([...(floor.objects ?? []), o]);
+                setSelected(o.id);
+              }}
+            >
+              + {kind}
+            </button>
+          ))}
+        </div>
+      </details>
+      <div className="editor-tools">
+        <button className="secondary" onClick={addResource}>
+          + Add resource
+        </button>
+        <button
+          className="text-button"
+          onClick={() => {
+            if (!draft || draft.layout.floors.length >= 10) return;
+            updateLayout({
+              ...draft.layout,
+              floors: [
+                ...draft.layout.floors,
+                {
+                  id: crypto.randomUUID(),
+                  name: `Floor ${draft.layout.floors.length + 1}`,
+                  width: floor.width,
+                  depth: floor.depth,
+                  resources: [],
+                  objects: [],
+                },
+              ],
+            });
+            setFloorIndex(draft.layout.floors.length);
+            setSelected('');
+          }}
+        >
+          + Add floor
+        </button>
+      </div>
+      <details className="object-library">
+        <summary>Floor settings</summary>
+        <label>
+          Floor name
+          <input
+            value={floor.name}
+            onChange={(e) =>
+              updateLayout({
+                ...draft!.layout,
+                floors: draft!.layout.floors.map((f, i) =>
+                  i === floorIndex ? { ...f, name: e.target.value } : f,
+                ),
+              })
+            }
+          />
+        </label>
+        <div className="field-grid">
+          {(['width', 'depth'] as const).map((key) => (
+            <label key={key}>
+              Floor {key}
+              <input
+                type="number"
+                min="5"
+                max="200"
+                value={floor[key]}
+                onChange={(e) =>
+                  updateLayout({
+                    ...draft.layout,
+                    floors: draft.layout.floors.map((f, i) =>
+                      i === floorIndex ? { ...f, [key]: Number(e.target.value) } : f,
+                    ),
+                  })
+                }
+              />
+            </label>
+          ))}
+        </div>
+      </details>
+      <details className="object-library">
+        <summary>Reservation pricing</summary>
+        <label>
+          Pricing mode
+          <select
+            value={draft.layout.pricing.mode}
+            onChange={(e) =>
+              updateLayout({
+                ...draft.layout,
+                pricing: {
+                  ...draft.layout.pricing,
+                  mode: e.target.value as Layout['pricing']['mode'],
+                },
+              })
+            }
+          >
+            <option value="free">Free reservations</option>
+            <option value="uniform">Same price for every place</option>
+            <option value="per-resource">Different price per seat / table / space</option>
+          </select>
+        </label>
+        {draft.layout.pricing.mode !== 'free' && (
+          <>
+            <label>
+              Currency
+              <select
+                value={draft.layout.pricing.currency}
+                onChange={(e) =>
+                  updateLayout({
+                    ...draft.layout,
+                    pricing: {
+                      ...draft.layout.pricing,
+                      currency: e.target.value as Layout['pricing']['currency'],
+                    },
+                  })
+                }
+              >
+                {currencySchema.options.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            {draft.layout.pricing.mode === 'uniform' && (
+              <label>
+                Standard reservation price
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="0.01"
+                  value={draft.layout.pricing.amount / 100}
+                  onChange={(e) =>
+                    updateLayout({
+                      ...draft.layout,
+                      pricing: {
+                        ...draft.layout.pricing,
+                        amount: Math.round(Number(e.target.value) * 100),
+                      },
+                    })
+                  }
+                />
+              </label>
+            )}
+            <p className="muted">
+              Per place, for the entire reservation. A table price covers the whole party. Payment
+              is not collected here.
+            </p>
+          </>
+        )}
+      </details>
       <div className="import-export">
         <button className="text-button" onClick={exportLayout}>
           ↓ Export JSON

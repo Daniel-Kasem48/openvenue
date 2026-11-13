@@ -1443,3 +1443,55 @@ dialog select {
 .map-resource:focus-visible > .resource-focus-ring {
   visibility: visible;
 }
+
+.layout-editor {
+  overflow: clip;
+}
+.layout-editor > .panel-title {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fffffb;
+  border-bottom: 1px solid var(--line);
+}
+.layout-editor .inspector h4 {
+  margin: 16px 0 12px;
+  overflow-wrap: anywhere;
+}
+.layout-editor .inspector .resource-editor {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.layout-editor .inspector .object-library {
+  margin: 16px 0;
+}
+.layout-editor .inspector summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+@media (min-width: 901px) {
+  .layout-editor .map-body {
+    height: clamp(520px, 70vh, 780px);
+  }
+  .layout-editor .inspector {
+    width: 310px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 20px;
+  }
+  .layout-editor .map-stage {
+    height: auto;
+    min-height: 0;
+  }
+}
+@media (max-width: 900px) {
+  .layout-editor > .panel-title {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .layout-editor .three-stage {
+    min-height: 350px;
+  }
+}
