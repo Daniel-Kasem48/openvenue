@@ -1,1 +1,6 @@
-{"name":"@openvenue/contracts","version":"0.1.0","type":"module","exports":"./src/index.ts"}
+{
+  "name": "@openvenue/contracts",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts"
+}
