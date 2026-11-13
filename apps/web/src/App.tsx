@@ -3,6 +3,8 @@ import { SceneBoundary } from './SceneBoundary';
 import { LayoutInspector } from './LayoutInspector';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
+  reservationPrice,
+  formatPrice,
   cloneLayout,
   intervalSchema,
   layoutSchema,
@@ -19,11 +21,17 @@ const Map3D = lazy(() => import('./Map3D'));
 const types: Record<VenueKind, { icon: string; name: string; description: string }> = {
   restaurant: { icon: '◉', name: 'Restaurant', description: 'Tables, chairs & good company' },
   parking: { icon: '▤', name: 'Parking', description: 'A place for every arrival' },
+  stadium: { icon: '◉', name: 'Stadium', description: 'Sections, rows & match days' },
   cinema: { icon: '▥', name: 'Cinema', description: 'Every seat has a story' },
 };
 export default function App() {
   const [step, setStep] = useState<'venues' | 'time' | 'place' | 'review' | 'done'>('venues');
-  const [confirmation, setConfirmation] = useState<Booking | null>(null);
+  const [confirmation, setConfirmation] = useState<(Booking & { bookings?: Booking[] }) | null>(
+    null,
+  );
+  const [emptyLayout, setEmptyLayout] = useState(false);
+  const [partySize, setPartySize] = useState(1);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [filter, setFilter] = useState<VenueKind | 'all'>('all');
   const [venues, setVenues] = useState<Venue[]>([]),
     [venueId, setVenueId] = useState(''),
@@ -58,16 +66,45 @@ export default function App() {
     current = editing && draft ? draft : venue,
     floor = current?.layout.floors[floorIndex],
     resource = floor?.resources.find((r) => r.id === selected);
+  const seatVenue = venue?.kind === 'cinema' || venue?.kind === 'stadium';
+  const bookingResources = seatVenue
+    ? (venue?.layout.floors
+        .flatMap((f) => f.resources)
+        .filter((r) => selectedSeats.includes(r.id)) ?? [])
+    : resource
+      ? [resource]
+      : [];
+  const total = venue
+    ? bookingResources.reduce((sum, r) => sum + reservationPrice(venue.layout, r), 0)
+    : 0;
+  const currency = venue?.layout.pricing.currency ?? 'USD';
+  useEffect(() => {
+    const ids = new Set(venue?.layout.floors.flatMap((f) => f.resources.map((r) => r.id)) ?? []);
+    setSelectedSeats((current) => current.filter((id) => ids.has(id)));
+  }, [venue]);
+  const selectPlace = (id: string) => {
+    if (editing || !seatVenue) {
+      setSelected(id);
+      return;
+    }
+    if (!id) return;
+    if (selectedSeats.includes(id)) {
+      setSelectedSeats(selectedSeats.filter((s) => s !== id));
+      return;
+    }
+    if (busy.includes(id) || selectedSeats.length >= partySize) return;
+    setSelectedSeats([...selectedSeats, id]);
+  };
   const activeShow = shows.find((s) => s.id === showId);
   const timeResult = intervalSchema.safeParse({
     start:
-      activeShow && venue?.kind === 'cinema'
+      activeShow && seatVenue
         ? activeShow.start
         : start && Number.isFinite(Date.parse(start))
           ? new Date(start).toISOString()
           : '',
     end:
-      activeShow && venue?.kind === 'cinema'
+      activeShow && seatVenue
         ? activeShow.end
         : end && Number.isFinite(Date.parse(end))
           ? new Date(end).toISOString()
@@ -121,7 +158,7 @@ export default function App() {
   useEffect(() => {
     setAvailabilityReady(false);
     setBusy([]);
-    if (!venueId || !timeStart || !timeEnd || (venue?.kind === 'cinema' && !showId)) return;
+    if (!venueId || !timeStart || !timeEnd || (seatVenue && !showId)) return;
     const controller = new AbortController();
     const update = () =>
       api<{ busy: string[] }>(
@@ -153,6 +190,8 @@ export default function App() {
   }, [dirty]);
   const chooseVenue = (id: string) => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
+    setPartySize(1);
+    setSelectedSeats([]);
     setStep(admin ? 'place' : 'time');
     setConfirmation(null);
     setVenueId(id);
@@ -215,6 +254,7 @@ export default function App() {
     });
   const openCreate = (copy?: Venue) => {
     setSource(copy ?? null);
+    setEmptyLayout(false);
     setKind(copy?.kind ?? 'restaurant');
     setNewName(copy ? `${copy.name} copy` : '');
     setModal('venue');
@@ -223,7 +263,7 @@ export default function App() {
     run(async () => {
       const result = await api<Venue>(
         '/venues',
-        json({ name: newName, kind, sourceId: source?.id }),
+        json({ name: newName, kind, sourceId: source?.id, empty: emptyLayout }),
       );
       setVenues((v) => [...v, result]);
       chooseVenue(result.id);
@@ -232,16 +272,21 @@ export default function App() {
     });
   const reserve = () =>
     run(async () => {
-      if (!venue || !resource || !interval) return;
-      const booking = await api<Booking>(
+      if (!venue || !bookingResources.length || !interval || !canReserve) return;
+      const booking = await api<Booking & { bookings?: Booking[] }>(
         '/bookings',
         json({
           venueId: venue.id,
-          resourceId: resource.id,
+          resourceId: bookingResources[0].id,
+          ...(seatVenue ? { resourceIds: bookingResources.map((r) => r.id) } : {}),
+          partySize,
+          expectedTotal: total,
+          expectedCurrency: currency,
           guestName: guest,
-          ...(venue.kind === 'cinema' ? { showId } : interval),
+          ...(seatVenue ? { showId } : interval),
         }),
-      ).catch((error) => {
+      ).catch(async (error) => {
+        await load();
         setRefresh((v) => v + 1);
         throw error;
       });
@@ -249,7 +294,7 @@ export default function App() {
       setStep('done');
       setRefresh((v) => v + 1);
       setGuest('');
-      setMessage(`Reservation confirmed for ${resource.label}.`);
+      setMessage(`Reservation confirmed for ${bookingResources.map((r) => r.label).join(', ')}.`);
     });
   const showBookings = () =>
     run(async () => {
@@ -291,6 +336,8 @@ export default function App() {
       depth: type === 'space' ? 5 : type === 'table' ? 1.6 : 1,
       rotation: 0,
       shape: 'rectangle',
+      price: 0,
+      elevation: 0,
       capacity: type === 'table' ? 4 : 1,
       accessible: false,
       ev: false,
@@ -305,13 +352,32 @@ export default function App() {
   };
   const timeFields = (
     <>
-      {' '}
-      {venue?.kind === 'cinema' ? (
+      {venue?.kind !== 'parking' && (
+        <label>
+          {seatVenue ? 'Number of seats' : 'Number of guests'}
+          <select
+            aria-label={seatVenue ? 'Number of seats' : 'Number of guests'}
+            value={partySize}
+            onChange={(e) => {
+              setPartySize(Number(e.target.value));
+              setSelected('');
+              setSelectedSeats([]);
+            }}
+          >
+            {Array.from({ length: seatVenue ? 20 : 50 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {i + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {seatVenue ? (
         <>
           <label>
-            Showtime
+            {venue?.kind === 'stadium' ? 'Event' : 'Showtime'}
             <select
-              aria-label="Showtime"
+              aria-label={venue?.kind === 'stadium' ? 'Event' : 'Showtime'}
               value={showId}
               onChange={(e) => setShowId(e.target.value)}
             >
@@ -334,7 +400,7 @@ export default function App() {
                 setModal('show');
               }}
             >
-              + Add showtime
+              + {venue?.kind === 'stadium' ? 'Add event' : 'Add showtime'}
             </button>
           )}
         </>
@@ -366,8 +432,16 @@ export default function App() {
     </>
   );
   const validTime =
-    !!interval && Date.parse(interval.start) > Date.now() && (venue?.kind !== 'cinema' || !!showId);
-  const canReserve = validTime && availabilityReady && !!resource && !busy.includes(selected);
+    !!interval && Date.parse(interval.start) > Date.now() && (!seatVenue || !!showId);
+  const canReserve =
+    validTime &&
+    availabilityReady &&
+    bookingResources.length > 0 &&
+    bookingResources.every((r) => !busy.includes(r.id)) &&
+    (seatVenue
+      ? bookingResources.length === partySize
+      : !!resource && resource.capacity >= partySize);
+  const confirmed = confirmation ? (confirmation.bookings ?? [confirmation]) : [];
   const directory = () => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
     setEditing(false);
@@ -530,6 +604,7 @@ export default function App() {
                       <tr>
                         <th>Guest</th>
                         <th>Venue / resource</th>
+                        <th>Party / price</th>
                         <th>When</th>
                         <th />
                       </tr>
@@ -544,6 +619,10 @@ export default function App() {
                           <td>
                             {b.venueName}
                             <small>{b.resourceLabel}</small>
+                          </td>
+                          <td>
+                            {b.partySize} {b.partySize === 1 ? 'guest' : 'guests'}
+                            <small>{formatPrice(b.price, b.currency)} · Not paid</small>
                           </td>
                           <td>
                             {new Date(b.start).toLocaleString()}
@@ -576,7 +655,7 @@ export default function App() {
           ) : step === 'venues' ? (
             <section aria-label="Venue directory">
               <div className="directory-filters" aria-label="Filter venues">
-                {(['all', 'restaurant', 'parking', 'cinema'] as const).map((type) => (
+                {(['all', 'restaurant', 'parking', 'cinema', 'stadium'] as const).map((type) => (
                   <button
                     key={type}
                     className={filter === type ? 'primary' : 'secondary'}
@@ -632,7 +711,24 @@ export default function App() {
                 <dd>{venue?.name}</dd>
                 <dt>Place</dt>
                 <dd>
-                  {resource?.label} · {floor?.name}
+                  {confirmed
+                    .map(
+                      (b) =>
+                        venue?.layout.floors
+                          .flatMap((f) => f.resources)
+                          .find((r) => r.id === b.resourceId)?.label,
+                    )
+                    .join(', ')}
+                </dd>
+                <dt>{seatVenue ? 'Seats' : 'Guests'}</dt>
+                <dd>{seatVenue ? confirmed.length : confirmation.partySize}</dd>
+                <dt>Total</dt>
+                <dd>
+                  {formatPrice(
+                    confirmed.reduce((sum, b) => sum + b.price, 0),
+                    confirmation.currency,
+                  )}{' '}
+                  · Not paid
                 </dd>
                 <dt>Guest</dt>
                 <dd>{confirmation.guestName}</dd>
@@ -641,7 +737,11 @@ export default function App() {
                 <dt>Until</dt>
                 <dd>{new Date(confirmation.end).toLocaleString()}</dd>
                 <dt>Reference</dt>
-                <dd className="booking-reference">{confirmation.id}</dd>
+                <dd className="booking-reference">
+                  {confirmed.map((b) => (
+                    <div key={b.id}>{b.id}</div>
+                  ))}
+                </dd>
               </dl>
               <p className="muted">
                 To change or cancel your reservation, contact the venue and quote this reference.
@@ -658,12 +758,12 @@ export default function App() {
               <div className="eyebrow">{types[venue.kind].name}</div>
               <h2>{venue.name}</h2>
               <p>
-                {venue.kind === 'cinema'
+                {seatVenue
                   ? 'Choose your screening before selecting a seat.'
                   : 'When will you visit? Availability is checked for the whole stay.'}
               </p>
               {timeFields}
-              {interval && !validTime && venue.kind !== 'cinema' && (
+              {interval && !validTime && !seatVenue && (
                 <p className="field-error">Choose an arrival time in the future.</p>
               )}
               <p className="muted">Times are shown in your device’s local time zone.</p>
@@ -673,6 +773,7 @@ export default function App() {
                 disabled={!validTime || !availabilityReady}
                 onClick={() => {
                   setSelected('');
+                  setSelectedSeats([]);
                   setStep('place');
                 }}
               >
@@ -811,9 +912,10 @@ export default function App() {
                       floor={floor}
                       kind={current.kind}
                       selected={selected}
+                      selectedIds={editing ? [] : selectedSeats}
                       busy={busy}
                       editing={editing}
-                      onSelect={setSelected}
+                      onSelect={selectPlace}
                       onMove={moveResource}
                     />
                   ) : (
@@ -824,8 +926,9 @@ export default function App() {
                           floor={floor}
                           kind={current.kind}
                           selected={selected}
+                          selectedIds={editing ? [] : selectedSeats}
                           busy={busy}
-                          onSelect={setSelected}
+                          onSelect={selectPlace}
                         />
                       </Suspense>
                     </SceneBoundary>
@@ -885,28 +988,102 @@ export default function App() {
                           {activeShow?.title}
                         </p>
                       )}
-                      <div className={`selection-card ${resource ? 'has-selection' : ''}`}>
+                      <div
+                        className={`selection-card ${bookingResources.length ? 'has-selection' : ''}`}
+                      >
                         <span className="selection-symbol">
                           {resource ? types[current.kind].icon : '⌖'}
                         </span>
-                        <strong>{resource ? resource.label : 'Your spot is waiting'}</strong>
+                        <strong>
+                          {bookingResources.length
+                            ? bookingResources.map((r) => r.label).join(', ')
+                            : 'Your spot is waiting'}
+                        </strong>
                         <small>
-                          {resource
-                            ? `${resource.kind === 'table' ? `${resource.capacity} guests` : '1 place'}${resource.accessible ? ' · Accessible' : ''}${resource.ev ? ' · EV charging' : ''}`
-                            : 'Select a resource on the map'}
+                          {seatVenue
+                            ? `${bookingResources.length} seats selected`
+                            : resource
+                              ? `${resource.kind === 'table' ? `${resource.capacity} guests` : '1 place'}${resource.accessible ? ' · Accessible' : ''}${resource.ev ? ' · EV charging' : ''}`
+                              : 'Select a resource on the map'}
                         </small>
                         {resource && busy.includes(resource.id) && (
                           <span className="reserved-label">Reserved for this time</span>
                         )}
                       </div>
+                      {seatVenue && bookingResources.some((r) => busy.includes(r.id)) && (
+                        <p className="field-error">
+                          A selected seat is no longer available. Remove it and choose another.
+                        </p>
+                      )}
+                      {seatVenue && step !== 'review' && (
+                        <div className="seat-chips">
+                          {bookingResources.map((r) => (
+                            <button
+                              className="secondary"
+                              key={r.id}
+                              onClick={() => selectPlace(r.id)}
+                              aria-label={`Remove ${r.label}`}
+                            >
+                              {r.label} ×
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {seatVenue && (
+                        <p>
+                          {selectedSeats.length} of {partySize} seats selected. Select a chosen seat
+                          again to remove it.
+                        </p>
+                      )}
+                      {!seatVenue && venue?.kind === 'restaurant' && (
+                        <p>
+                          {partySize} {partySize === 1 ? 'guest' : 'guests'} · Choose a table with
+                          enough seats.
+                        </p>
+                      )}
+                      {!seatVenue && resource && resource.capacity < partySize && (
+                        <p className="field-error">
+                          This table seats {resource.capacity}. Choose a larger table or change your
+                          party size.
+                        </p>
+                      )}
+                      {bookingResources.length > 0 && (
+                        <div className="price-summary" aria-label="Reservation price summary">
+                          {bookingResources.map((r) => (
+                            <p key={r.id}>
+                              {r.label}
+                              <strong>
+                                {formatPrice(reservationPrice(venue!.layout, r), currency)}
+                              </strong>
+                            </p>
+                          ))}
+                          <p>
+                            Total<strong>{formatPrice(total, currency)}</strong>
+                          </p>
+                          <small>For the entire reservation. Payment is not collected here.</small>
+                        </div>
+                      )}
                       {(admin || step !== 'review') && (view === '3d' || !admin) && (
                         <label>
                           Resource
-                          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+                          <select
+                            value={seatVenue ? '' : selected}
+                            onChange={(e) => selectPlace(e.target.value)}
+                          >
                             <option value="">Select a resource</option>
                             {floor.resources.map((r) => (
-                              <option key={r.id} value={r.id}>
+                              <option
+                                key={r.id}
+                                value={r.id}
+                                disabled={
+                                  busy.includes(r.id) || (!seatVenue && r.capacity < partySize)
+                                }
+                              >
                                 {r.label}
+                                {selectedSeats.includes(r.id) ? ' · Selected' : ''}
+                                {venue?.layout.pricing.mode !== 'free'
+                                  ? ` · ${formatPrice(reservationPrice(venue!.layout, r), currency)}`
+                                  : ''}
                                 {busy.includes(r.id) ? ' · Reserved' : ''}
                               </option>
                             ))}
@@ -952,8 +1129,7 @@ export default function App() {
                         </>
                       )}
                       <p className="privacy-note">
-                        No payment required. Your details are visible only to the venue
-                        administrator.
+                        Your details are visible only to the venue administrator.
                       </p>
                     </>
                   )}
@@ -1035,6 +1211,18 @@ export default function App() {
                 ))}
               </select>
             </label>
+            {!source && (
+              <label>
+                Starting layout
+                <select
+                  value={emptyLayout ? 'empty' : 'template'}
+                  onChange={(e) => setEmptyLayout(e.target.value === 'empty')}
+                >
+                  <option value="template">Seeded template · customize everything</option>
+                  <option value="empty">Empty scene · build from scratch</option>
+                </select>
+              </label>
+            )}
             <div className="template-preview">
               <span>{types[kind].icon}</span>
               <strong>{types[kind].name}</strong>
@@ -1043,7 +1231,9 @@ export default function App() {
                   ? 'Bistro · dining, cocktail bar & lounge'
                   : kind === 'parking'
                     ? 'Garage · 2 levels, EV bays, ramp & security'
-                    : 'Cinema · 48 seats, foyer & concessions'}
+                    : kind === 'stadium'
+                      ? 'Stadium · 96 seats, 4 stands, tiered rows & pitch'
+                      : 'Cinema · 48 seats, foyer & concessions'}
               </p>
             </div>
             {error && <p className="field-error">{error}</p>}

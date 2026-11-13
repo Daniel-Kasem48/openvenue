@@ -16,6 +16,8 @@ const item = (
   width,
   depth,
   capacity,
+  price: 0,
+  elevation: 0,
   shape: 'rectangle',
   rotation: 0,
   accessible: false,
@@ -28,6 +30,7 @@ export function makeObject(
   overrides: Partial<SceneObject> = {},
 ): SceneObject {
   const dimensions: Record<SceneObject['kind'], [number, number, number, string]> = {
+    pitch: [36, 24, 2, '#438653'],
     plant: [0.8, 0.8, 1.5, '#56805a'],
     counter: [3, 1, 1.1, '#b88a60'],
     sofa: [2.4, 1, 0.85, '#ac805f'],
@@ -57,9 +60,53 @@ export function makeObject(
   };
 }
 export function makeTemplate(kind: VenueKind): Layout {
+  if (kind === 'stadium')
+    return {
+      version: 1,
+      pricing: { mode: 'per-resource', currency: 'USD', amount: 0 },
+      floors: [
+        {
+          id: crypto.randomUUID(),
+          name: 'Arena · North, South, East & West stands',
+          width: 64,
+          depth: 52,
+          resources: ['North', 'South', 'East', 'West'].flatMap((section, side) =>
+            Array.from({ length: 24 }, (_, i) => {
+              const row = Math.floor(i / 8),
+                col = i % 8;
+              const x = side < 2 ? 19.75 + col * 3.5 : side === 2 ? 56 + row * 2 : 8 - row * 2;
+              const y = side === 0 ? 8 - row * 2 : side === 1 ? 44 + row * 2 : 15.5 + col * 3;
+              return {
+                ...item(
+                  'seat',
+                  `${section} ${String.fromCharCode(65 + row)}${col + 1}`,
+                  x,
+                  y,
+                  1,
+                  1.1,
+                ),
+                rotation: [180, 0, 270, 90][side],
+                elevation: row * 0.6,
+                price: side < 2 ? 2500 + (2 - row) * 1000 : 4000 + (2 - row) * 1500,
+                accessible: row === 0 && col === 0,
+              };
+            }),
+          ),
+          objects: [
+            makeObject('pitch', 32, 26, { label: 'Football pitch' }),
+            makeObject('door', 32, 51, { label: 'South entrance', width: 4 }),
+            makeObject('door', 32, 1, { label: 'North entrance', width: 4 }),
+            makeObject('screen', 51, 3, { label: 'Scoreboard', width: 8, height: 4 }),
+            makeObject('counter', 5, 48, { label: 'Concessions', width: 6 }),
+            makeObject('counter', 59, 48, { label: 'Ticket office', width: 6 }),
+          ],
+        },
+      ],
+    };
   if (kind === 'restaurant')
     return {
       version: 1,
+      pricing: { mode: 'free', currency: 'USD', amount: 0 },
       floors: [
         {
           id: crypto.randomUUID(),
@@ -100,6 +147,7 @@ export function makeTemplate(kind: VenueKind): Layout {
   if (kind === 'parking')
     return {
       version: 1,
+      pricing: { mode: 'free', currency: 'USD', amount: 0 },
       floors: Array.from({ length: 2 }, (_, f) => ({
         id: crypto.randomUUID(),
         name: `Level ${f + 1} · ${f === 0 ? 'visitor & EV' : 'long stay'}`,
@@ -146,6 +194,7 @@ export function makeTemplate(kind: VenueKind): Layout {
     };
   return {
     version: 1,
+    pricing: { mode: 'free', currency: 'USD', amount: 0 },
     floors: [
       {
         id: crypto.randomUUID(),

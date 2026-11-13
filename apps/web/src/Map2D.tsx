@@ -5,12 +5,22 @@ type Props = {
   floor: Floor;
   kind: VenueKind;
   selected?: string;
+  selectedIds?: string[];
   busy: string[];
   editing: boolean;
   onSelect: (id: string) => void;
   onMove: (id: string, x: number, y: number) => void;
 };
-export default function Map2D({ floor, kind, selected, busy, editing, onSelect, onMove }: Props) {
+export default function Map2D({
+  floor,
+  kind,
+  selected,
+  selectedIds = [],
+  busy,
+  editing,
+  onSelect,
+  onMove,
+}: Props) {
   const ref = useRef<SVGSVGElement>(null),
     drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const [zoom, setZoom] = useState(1),
@@ -94,39 +104,6 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
           height={floor.depth - 0.2}
           fill="url(#grid)"
         />
-        {kind === 'cinema' && !(floor.objects ?? []).some((o) => o.kind === 'screen') && (
-          <>
-            <rect
-              x={floor.width * 0.2}
-              y="1"
-              width={floor.width * 0.6}
-              height="0.25"
-              rx="0.1"
-              fill="#96a89e"
-            />
-            <text x={floor.width / 2} y="2.3" textAnchor="middle" className="map-caption">
-              SCREEN
-            </text>
-          </>
-        )}
-        {kind === 'parking' && (
-          <>
-            <path
-              d={`M 2 ${floor.depth / 2} H ${floor.width - 2}`}
-              stroke="#c7d1c8"
-              strokeWidth="0.08"
-              strokeDasharray="0.6 0.4"
-            />
-            <text
-              x={floor.width / 2}
-              y={floor.depth / 2 - 0.6}
-              textAnchor="middle"
-              className="map-caption"
-            >
-              ONE WAY →
-            </text>
-          </>
-        )}
         {(floor.objects ?? []).map((o) => (
           <g
             key={o.id}
@@ -165,7 +142,7 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
         ))}
         {floor.resources.map((r) => {
           const unavailable = busy.includes(r.id),
-            active = selected === r.id;
+            active = selected === r.id || selectedIds.includes(r.id);
           return (
             <g
               key={r.id}

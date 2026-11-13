@@ -221,3 +221,152 @@ test('guest follows venue, time, place, review and confirmation with conflict re
   await page.getByRole('button', { name: 'Book another visit' }).click();
   await expect(page.getByRole('region', { name: 'Venue directory' })).toBeVisible();
 });
+
+test('restaurant party size requires a table with sufficient capacity', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Party capacity ${Date.now()}`;
+  await request.post('/api/venues', { data: { name, kind: 'restaurant' } });
+  await page.goto('/');
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByLabel('Number of guests').selectOption('4');
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  const select = page.getByRole('combobox', { name: 'Resource', exact: true });
+  const data = await (await page.request.get('/api/venues')).json();
+  const v = data.find((v: any) => v.name === name);
+  const small = v.layout.floors[0].resources.find((r: any) => r.capacity < 4);
+  const large = v.layout.floors[0].resources.find((r: any) => r.capacity >= 4);
+  await expect(select.locator(`option[value="${small.id}"]`)).toBeDisabled();
+  await select.selectOption(large.id);
+  await expect(page.getByRole('button', { name: 'Review reservation' })).toBeEnabled();
+});
+
+test('stadium is editable data, supports seat counts and saves per-seat prices', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90000);
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Stadium workflow ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { name, kind: 'stadium' } })
+  ).json();
+  const start = new Date(Date.now() + 86400000).toISOString(),
+    end = new Date(Date.now() + 93600000).toISOString();
+  await request.post(`/api/venues/${venue.id}/shows`, {
+    data: { title: 'Home match', start, end },
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  await page.getByRole('button', { name: 'Select North A1', exact: true }).click();
+  await page.getByLabel('Reservation price', { exact: true }).fill('12.50');
+  await page.getByRole('button', { name: 'Select Football pitch', exact: true }).click();
+  await page.getByLabel('Object label').fill('Custom pitch');
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await page.reload();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  await page.getByRole('button', { name: 'Select Custom pitch', exact: true }).click();
+  await expect(page.getByLabel('Object label')).toHaveValue('Custom pitch');
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.locator('.profile').click();
+  await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
+  await page.getByLabel('Number of seats').selectOption('2');
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  await expect(page.getByRole('button', { name: '3D view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('canvas')).toBeVisible();
+  const select = page.getByRole('combobox', { name: 'Resource', exact: true });
+  await select.selectOption(venue.layout.floors[0].resources[0].id);
+  await expect(page.getByRole('button', { name: 'Review reservation' })).toBeDisabled();
+  await select.selectOption(venue.layout.floors[0].resources[1].id);
+  await page.screenshot({ path: '/tmp/openvenue-stadium.png', fullPage: true });
+  await page.getByRole('button', { name: 'Review reservation' }).click();
+  await expect(page.getByLabel('Reservation price summary')).toContainText('$57.50');
+  await page.getByLabel('Guest name').fill('Stadium Guests');
+  await page.getByRole('button', { name: 'Confirm reservation' }).click();
+  const receipt = page.getByRole('region', { name: 'Booking confirmation' });
+  await expect(receipt).toContainText('$57.50');
+  await expect(receipt).toContainText('North A1, North A2');
+});
+
+test('guest can replace a seat removed by an operator after review', async ({ page, request }) => {
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Seat removed ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { name, kind: 'cinema' } })
+  ).json();
+  await request.post(`/api/venues/${venue.id}/shows`, {
+    data: {
+      title: 'Screening',
+      start: new Date(Date.now() + 86400000).toISOString(),
+      end: new Date(Date.now() + 93600000).toISOString(),
+    },
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  await page.getByRole('combobox', { name: 'Resource', exact: true }).selectOption({ label: 'A1' });
+  await page.getByRole('button', { name: 'Review reservation' }).click();
+  await page.getByLabel('Guest name').fill('Guest with removed seat');
+  venue.layout.floors[0].resources.shift();
+  const response = await request.put(`/api/venues/${venue.id}`, {
+    data: { layout: venue.layout, name: venue.name, revision: venue.revision },
+  });
+  expect(response.ok()).toBe(true);
+  await page.getByRole('button', { name: 'Confirm reservation' }).click();
+  await expect(page.getByRole('alert')).toContainText('Resource not found');
+  await page.getByRole('button', { name: 'Change place' }).click();
+  await page.getByRole('combobox', { name: 'Resource', exact: true }).selectOption({ label: 'A2' });
+  await expect(page.getByRole('button', { name: 'Review reservation' })).toBeEnabled();
+});
+
+test('operator builds an empty scene and saved objects survive reload', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New venue' }).click();
+  const name = `Empty stadium ${Date.now()}`;
+  await page.getByLabel('Venue name').fill(name);
+  await page.getByRole('combobox', { name: 'Template', exact: true }).selectOption('stadium');
+  await page.getByLabel('Starting layout').selectOption('empty');
+  await page.getByRole('button', { name: 'Create venue' }).click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Select Football pitch', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '+ pitch', exact: true }).click();
+  await page.getByLabel('Object label').fill('My custom field');
+  await page.getByLabel('Object color').fill('#123456');
+  await page.getByLabel('width', { exact: true }).fill('25');
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await page.reload();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  await page.getByRole('button', { name: 'Select My custom field', exact: true }).click();
+  await expect(page.getByLabel('width', { exact: true })).toHaveValue('25');
+  await expect(page.getByLabel('Object color')).toHaveValue('#123456');
+});

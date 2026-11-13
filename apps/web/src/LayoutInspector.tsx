@@ -1,4 +1,5 @@
 import {
+  currencySchema,
   makeObject,
   objectKinds,
   type SceneObject,
@@ -48,6 +49,76 @@ export function LayoutInspector({
       <div className="eyebrow">LAYOUT STUDIO</div>
       <h3>Make it your own.</h3>
       <p className="muted">Select an item to edit. Drag it on the 2D map to move.</p>
+      <details className="object-library" open>
+        <summary>Reservation pricing</summary>
+        <label>
+          Pricing mode
+          <select
+            value={draft.layout.pricing.mode}
+            onChange={(e) =>
+              updateLayout({
+                ...draft.layout,
+                pricing: {
+                  ...draft.layout.pricing,
+                  mode: e.target.value as Layout['pricing']['mode'],
+                },
+              })
+            }
+          >
+            <option value="free">Free reservations</option>
+            <option value="uniform">Same price for every place</option>
+            <option value="per-resource">Different price per seat / table / space</option>
+          </select>
+        </label>
+        {draft.layout.pricing.mode !== 'free' && (
+          <>
+            <label>
+              Currency
+              <select
+                value={draft.layout.pricing.currency}
+                onChange={(e) =>
+                  updateLayout({
+                    ...draft.layout,
+                    pricing: {
+                      ...draft.layout.pricing,
+                      currency: e.target.value as Layout['pricing']['currency'],
+                    },
+                  })
+                }
+              >
+                {currencySchema.options.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            {draft.layout.pricing.mode === 'uniform' && (
+              <label>
+                Standard reservation price
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="0.01"
+                  value={draft.layout.pricing.amount / 100}
+                  onChange={(e) =>
+                    updateLayout({
+                      ...draft.layout,
+                      pricing: {
+                        ...draft.layout.pricing,
+                        amount: Math.round(Number(e.target.value) * 100),
+                      },
+                    })
+                  }
+                />
+              </label>
+            )}
+            <p className="muted">
+              Per place, for the entire reservation. A table price covers the whole party. Payment
+              is not collected here.
+            </p>
+          </>
+        )}
+      </details>
       <div className="editor-tools">
         <button className="secondary" onClick={addResource}>
           + Add resource
@@ -91,8 +162,29 @@ export function LayoutInspector({
           }
         />
       </label>
+      <div className="field-grid">
+        {(['width', 'depth'] as const).map((key) => (
+          <label key={key}>
+            Floor {key}
+            <input
+              type="number"
+              min="5"
+              max="200"
+              value={floor[key]}
+              onChange={(e) =>
+                updateLayout({
+                  ...draft.layout,
+                  floors: draft.layout.floors.map((f, i) =>
+                    i === floorIndex ? { ...f, [key]: Number(e.target.value) } : f,
+                  ),
+                })
+              }
+            />
+          </label>
+        ))}
+      </div>
       <details className="object-library" open>
-        <summary>Object library · 12 types</summary>
+        <summary>Object library · {objectKinds.length} types</summary>
         <div className="object-palette">
           {objectKinds.map((kind) => (
             <button
@@ -158,6 +250,22 @@ export function LayoutInspector({
               onChange={(e) => updateResource({ label: e.target.value })}
             />
           </label>
+          {draft.layout.pricing.mode === 'per-resource' && (
+            <label>
+              Reservation price ({draft.layout.pricing.currency})
+              <input
+                aria-label="Reservation price"
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                value={resource.price / 100}
+                onChange={(e) =>
+                  updateResource({ price: Math.round(Number(e.target.value) * 100) })
+                }
+              />
+            </label>
+          )}
           {resource.kind === 'table' && (
             <label>
               Table shape
@@ -171,17 +279,19 @@ export function LayoutInspector({
             </label>
           )}
           <div className="field-grid">
-            {(['x', 'y', 'width', 'depth', 'rotation', 'capacity'] as const).map((key) => (
-              <label key={key}>
-                {key}
-                <input
-                  type="number"
-                  step={key === 'capacity' ? 1 : 0.25}
-                  value={resource[key]}
-                  onChange={(e) => updateResource({ [key]: Number(e.target.value) })}
-                />
-              </label>
-            ))}
+            {(['x', 'y', 'width', 'depth', 'rotation', 'capacity', 'elevation'] as const).map(
+              (key) => (
+                <label key={key}>
+                  {key}
+                  <input
+                    type="number"
+                    step={key === 'capacity' ? 1 : 0.25}
+                    value={resource[key]}
+                    onChange={(e) => updateResource({ [key]: Number(e.target.value) })}
+                  />
+                </label>
+              ),
+            )}
           </div>
           <label className="check">
             <input

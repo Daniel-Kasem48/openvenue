@@ -31,6 +31,26 @@ export function Object2D({ object: o }: { object: SceneObject }) {
           strokeWidth=".035"
         />
       )}
+      {o.kind === 'pitch' && (
+        <g transform={`scale(${w / 36} ${d / 24})`} aria-label="Football pitch markings">
+          <rect
+            x="-17.8"
+            y="-11.8"
+            width="35.6"
+            height="23.6"
+            fill="none"
+            stroke="white"
+            strokeWidth="0.15"
+          />
+          <path
+            d="M0,-12 V12 M-18,-6 H-13 V6 H-18 M18,-6 H13 V6 H18"
+            fill="none"
+            stroke="white"
+            strokeWidth="0.15"
+          />
+          <circle r="3" fill="none" stroke="white" strokeWidth="0.15" />
+        </g>
+      )}
       {o.kind === 'sofa' && (
         <>
           <rect

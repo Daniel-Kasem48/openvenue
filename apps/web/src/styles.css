@@ -1366,3 +1366,32 @@ dialog select {
     padding: 20px;
   }
 }
+.price-summary {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+  margin: 16px 0;
+}
+.price-summary p {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.price-summary small {
+  display: block;
+  color: #657064;
+  line-height: 1.5;
+}
+.venue-art.stadium {
+  background: linear-gradient(135deg, #d0e8d0, #ecf4df);
+  color: #397b50;
+}
+.seat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.seat-chips .secondary {
+  padding: 6px 9px;
+}

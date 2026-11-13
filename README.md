@@ -1,7 +1,7 @@
 # OpenVenue
 
 Open-source 2D/3D venue maps and reservations. Start from a restaurant, parking
-building, or cinema template; edit the layout and let guests reserve a resource.
+building, cinema, or stadium template; edit the layout and let guests reserve a resource.
 Fresh implementation by Daniel Kasem, inspired by the shared-scene approach in
 Spantrek. No Spantrek code, credentials, or artwork is included.
 
@@ -10,9 +10,10 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Restaurant: a furnished bistro with 12 round/rectangular tables, chairs, place settings, cocktail bar, reception and lounge.
 - Parking: 32 spaces across two floors, EV chargers, accessible bays, security booth, entry barrier, ramps, stairs and staff vehicles.
 - Cinema: 48 upholstered seats with armrests, screen, acoustic partitions, foyer, concessions and administrator-created showtimes.
+- Stadium: 96 priced seats in four stands, tiered rows, an editable football pitch, entrances, scoreboard and concessions.
 - SVG map editor: drag, numeric position/size/rotation, labels, floors, resources.
 - 3D opens by default: rounded furniture, detailed vehicles, shaded materials, orbit/zoom, camera fitting, selection and availability. Editing switches to 2D.
-- Twelve editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers and barriers. Position, size, height, rotation and color persist in the shared layout.
+- Thirteen editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers, barriers and pitches. Position, size, height, rotation and color persist in the shared layout.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.
 - Administrator sign-in, reservation list and cancellation. Guest names are private.
@@ -20,9 +21,19 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 
 ## Booking and management
 
-Guests start in the venue directory, choose dates or a cinema screening, select a place in the default 3D view, review their choice, and receive a confirmation reference. Availability is checked again by the server when confirming; a conflict keeps the guest’s name so they can choose another place. Save the confirmation details before leaving the page; guest self-service cancellation and email receipts are not included.
+Guests start in the venue directory, choose dates, a cinema screening or a stadium event, select a place in the default 3D view, review their choice, and receive a confirmation reference. Availability is checked again by the server when confirming; a conflict keeps the guest’s name so they can choose another place. Save the confirmation details before leaving the page; guest self-service cancellation and email receipts are not included.
 
 Administrators sign in to access venue setup, layout editing, showtimes, and the reservations list directly. Existing venues and bookings are preserved when updating the app.
+
+## Dynamic scene builder and pricing
+
+Templates create independent starting JSON data with new IDs. Each venue’s complete scene is saved in PostgreSQL `venues.layout` (JSONB); TSX only renders object types. Start from a template or choose **Empty scene**. Add/remove objects and seats, resize the floor, move/rotate/resize objects, and save. Refreshing reads the saved scene, never reapplies the template. Import/export supports the same validated JSON format.
+
+The stadium seed has 96 seats across four stands, three row heights, an editable pitch, entrances, scoreboard and concessions. The pitch is an ordinary scene object; deleting it removes it from both views.
+
+In **Edit layout → Reservation pricing**, choose free, one standard price, or different prices per seat/table/space. For individual prices, select a resource and edit its reservation price. Supported currencies: USD, EUR, GBP, AED, SAR and SYP. Prices are for the entire reservation, not per hour; a table price covers the whole party. Values are stored as integer minor units. The server computes the total, checks the guest’s quote, and snapshots each confirmed price/currency so later edits do not change historical reservations. No payment is collected.
+
+Restaurant guests choose party size and a table with enough capacity. Cinema/stadium guests choose a seat count and toggle that many seats. If any seat conflicts, the entire checkout rolls back. Each seat can subsequently be cancelled individually by the administrator.
 
 ## Quick start with Docker
 
@@ -73,7 +84,7 @@ reservation history cannot be removed, including through import.
 apps/web/src/          React workspace, SVG editor and lazy-loaded 3D viewer
 apps/api/src/          NestJS host, REST routes, auth and database transactions
 apps/api/migrations/   Initial schema (idempotent, locked during initialization)
-packages/contracts/   Zod validation, shared types and three template factories
+packages/contracts/   Zod validation, shared types and four template factories
 tests/                Contract tests and real PostgreSQL integration tests
   browser/            Playwright end-to-end flows
 ```
@@ -128,7 +139,7 @@ proxy handling before high-volume use behind a proxy.
 - 3D uses stylized procedural models and needs WebGL; 2D remains available. Table models display up to eight chairs.
 - Existing saved layouts remain compatible; create a new venue to use the richer furnished templates. Scenery is decorative and is not bookable.
 - Availability refreshes every 15 seconds and is rechecked at booking time.
-- One resource per reservation, at most seven days; no payments or ticket issuance.
+- One table or parking space per reservation; up to 20 seats per cinema/stadium checkout, saved atomically with one reference per seat. Reservations last at most seven days. No payments or ticket issuance.
 - Cinema showtimes apply to the venue; no multi-auditorium scheduling in this MVP.
 - No recurring reservations, customer accounts, calendar integrations or CAD imports.
 - Up to 10 floors and 1,000 resources per floor. Large scenes are not load-tested.

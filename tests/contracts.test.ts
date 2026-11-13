@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cloneLayout, layoutSchema, makeTemplate } from '@openvenue/contracts';
 describe('venue templates and layout boundary', () => {
-  for (const kind of ['restaurant', 'parking', 'cinema'] as const) {
+  for (const kind of ['restaurant', 'parking', 'cinema', 'stadium'] as const) {
     it(`provides a valid independent ${kind} template`, () => {
       const a = makeTemplate(kind),
         b = makeTemplate(kind);
@@ -38,7 +38,7 @@ it('normalizes UUID case before checking uniqueness', () => {
 });
 
 it('provides realistic furnished templates and clones every object independently', () => {
-  for (const kind of ['restaurant', 'parking', 'cinema'] as const) {
+  for (const kind of ['restaurant', 'parking', 'cinema', 'stadium'] as const) {
     const layout = makeTemplate(kind);
     expect(cloneLayout(layout).floors[0].objects[0].id).not.toBe(layout.floors[0].objects[0].id);
     expect(layout.floors[0].objects?.length).toBeGreaterThan(5);
@@ -56,4 +56,13 @@ it('supports old layouts and validates scenery bounds and unique IDs', () => {
   scene.floors[0].objects[0].id = crypto.randomUUID();
   scene.floors[0].objects[0].x = 500;
   expect(layoutSchema.safeParse(scene).success).toBe(false);
+});
+
+it('faces each stadium stand toward the pitch', () => {
+  const floor = makeTemplate('stadium').floors[0];
+  for (const r of floor.resources) {
+    const angle = (r.rotation * Math.PI) / 180;
+    const inward = [floor.width / 2 - r.x, floor.depth / 2 - r.y];
+    expect(Math.sin(angle) * inward[0] - Math.cos(angle) * inward[1]).toBeGreaterThan(0);
+  }
 });

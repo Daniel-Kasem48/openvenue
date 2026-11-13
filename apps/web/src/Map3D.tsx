@@ -41,7 +41,7 @@ function ResourceModel({
           : '#4c7167';
   return (
     <group
-      position={[r.x - floor.width / 2, 0, r.y - floor.depth / 2]}
+      position={[r.x - floor.width / 2, r.elevation ?? 0, r.y - floor.depth / 2]}
       rotation={[0, (-r.rotation * Math.PI) / 180, 0]}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -53,6 +53,12 @@ function ResourceModel({
         onSelect(r.id);
       }}
     >
+      {r.elevation > 0 && (
+        <mesh position={[0, -r.elevation / 2, 0]} receiveShadow>
+          <boxGeometry args={[r.width + 0.5, r.elevation, r.depth + 0.5]} />
+          <meshStandardMaterial color="#9ca4a5" />
+        </mesh>
+      )}
       {(selected || hovered) && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.017, 0]}>
           <planeGeometry args={[r.width + 0.5, r.depth + 0.5]} />
@@ -75,12 +81,14 @@ export default function Map3D({
   floor,
   kind,
   selected,
+  selectedIds = [],
   busy,
   onSelect,
 }: {
   floor: Floor;
   kind: VenueKind;
   selected?: string;
+  selectedIds?: string[];
   busy: string[];
   onSelect: (id: string) => void;
 }) {
@@ -175,35 +183,6 @@ export default function Map3D({
                 <boxGeometry args={[0.18, 1.2, floor.depth]} />
                 <meshStandardMaterial color={dark ? '#444558' : '#d7d8c9'} />
               </mesh>
-              {kind === 'parking' &&
-                Array.from({ length: Math.floor(floor.width / 2) }, (_, i) => (
-                  <mesh
-                    key={i}
-                    position={[-floor.width / 2 + i * 2 + 1, 0.02, 0]}
-                    rotation={[-Math.PI / 2, 0, 0]}
-                  >
-                    <planeGeometry args={[0.8, 0.1]} />
-                    <meshStandardMaterial color="#e3d9ad" />
-                  </mesh>
-                ))}
-              {kind === 'cinema' && !(floor.objects ?? []).some((o) => o.kind === 'screen') && (
-                <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
-                  <Scenery
-                    object={{
-                      id: 'screen',
-                      kind: 'screen',
-                      label: 'Screen',
-                      x: floor.width / 2,
-                      y: 1,
-                      width: floor.width * 0.65,
-                      depth: 0.4,
-                      height: 3,
-                      color: '#c5deec',
-                      rotation: 0,
-                    }}
-                  />
-                </group>
-              )}
               <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
                 {(floor.objects ?? []).map((o) => (
                   <Scenery key={o.id} object={o} />
@@ -214,7 +193,7 @@ export default function Map3D({
                   key={r.id}
                   resource={r}
                   floor={floor}
-                  selected={selected === r.id}
+                  selected={selected === r.id || selectedIds.includes(r.id)}
                   reserved={busy.includes(r.id)}
                   onSelect={onSelect}
                 />

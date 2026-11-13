@@ -19,5 +19,23 @@ it('uses the editable cinema screen without leaving the legacy screen behind', (
     );
   expect(render()).not.toContain('>SCREEN</text>');
   floor.objects = [];
-  expect(render()).toContain('>SCREEN</text>');
+  expect(render()).not.toContain('>SCREEN</text>');
+});
+
+it('renders a stadium pitch only from editable scene objects', () => {
+  const floor = makeTemplate('stadium').floors[0];
+  const render = () =>
+    renderToStaticMarkup(
+      createElement(Map2D, {
+        floor,
+        kind: 'stadium',
+        busy: [],
+        editing: false,
+        onSelect: () => {},
+        onMove: () => {},
+      }),
+    );
+  expect(render()).toContain('Football pitch markings');
+  floor.objects = floor.objects.filter((o) => o.kind !== 'pitch');
+  expect(render()).not.toContain('Football pitch markings');
 });

@@ -207,4 +207,165 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     const result = await pool.query('SELECT name FROM venues WHERE id=$1', [venue.id]);
     expect(result.rows[0].name).toBe(venue.name);
   });
+  it('validates and persists restaurant party size', async () => {
+    const v = await (
+      await request('/venues', { kind: 'restaurant', name: 'Party size' }, true)
+    ).json();
+    const r = v.layout.floors[0].resources[0];
+    const body = { venueId: v.id, resourceId: r.id, guestName: 'Party', ...interval };
+    for (const partySize of [0, 1.5, r.capacity + 1])
+      expect((await request('/bookings', { ...body, partySize })).status).toBe(400);
+    const response = await request('/bookings', { ...body, partySize: r.capacity });
+    expect(response.status).toBe(201);
+    expect((await response.json()).partySize).toBe(r.capacity);
+    const rows = await (await request('/bookings', undefined, true)).json();
+    expect(rows.find((b: any) => b.venueId === v.id).partySize).toBe(r.capacity);
+  });
+  it('reserves cinema seats atomically and rejects duplicate or mismatched selections', async () => {
+    const v = await (
+      await request('/venues', { kind: 'cinema', name: 'Group seats' }, true)
+    ).json();
+    const show = await (
+      await request(`/venues/${v.id}/shows`, { title: 'Group screening', ...interval }, true)
+    ).json();
+    const ids = v.layout.floors[0].resources.slice(0, 3).map((r: any) => r.id);
+    const body = { venueId: v.id, resourceId: ids[0], guestName: 'Cinema group', showId: show.id };
+    expect(
+      (await request('/bookings', { ...body, resourceIds: [ids[0], ids[0]], partySize: 2 })).status,
+    ).toBe(400);
+    expect(
+      (await request('/bookings', { ...body, resourceIds: ids.slice(0, 2), partySize: 3 })).status,
+    ).toBe(400);
+    expect((await request('/bookings', { ...body, resourceId: ids[1] })).status).toBe(201);
+    expect(
+      (await request('/bookings', { ...body, resourceIds: ids.slice(0, 2), partySize: 2 })).status,
+    ).toBe(409);
+    const available = await (
+      await request(`/venues/${v.id}/availability?start=${interval.start}&end=${interval.end}`)
+    ).json();
+    expect(available.busy).not.toContain(ids[0]);
+    const response = await request('/bookings', {
+      ...body,
+      resourceIds: [ids[0], ids[2]],
+      partySize: 2,
+    });
+    expect(response.status).toBe(201);
+    expect((await response.json()).bookings.map((b: any) => b.resourceId)).toEqual([
+      ids[0],
+      ids[2],
+    ]);
+  });
+  it('uses configured prices, rejects stale quotes, and preserves booking prices', async () => {
+    let v = await (
+      await request('/venues', { kind: 'stadium', name: 'Priced stadium' }, true)
+    ).json();
+    const show = await (
+      await request(`/venues/${v.id}/shows`, { title: 'Pricing event', ...interval }, true)
+    ).json();
+    const ids = v.layout.floors[0].resources.slice(0, 2).map((r: any) => r.id);
+    const total = v.layout.floors[0].resources
+      .slice(0, 2)
+      .reduce((sum: number, r: any) => sum + r.price, 0);
+    const body = {
+      venueId: v.id,
+      resourceId: ids[0],
+      resourceIds: ids,
+      partySize: 2,
+      guestName: 'Quoted party',
+      showId: show.id,
+      expectedCurrency: 'USD',
+    };
+    expect((await request('/bookings', { ...body, expectedTotal: 1 })).status).toBe(409);
+    const res = await request('/bookings', { ...body, expectedTotal: total });
+    expect(res.status).toBe(201);
+    const booked = await res.json();
+    expect(booked.bookings.reduce((sum: number, b: any) => sum + b.price, 0)).toBe(total);
+    v.layout.pricing = { mode: 'uniform', currency: 'EUR', amount: 1234 };
+    v = await (
+      await request(
+        `/venues/${v.id}`,
+        { layout: v.layout, name: v.name, revision: v.revision },
+        true,
+        'PUT',
+      )
+    ).json();
+    const other = v.layout.floors[0].resources[2].id;
+    const uniform = await request('/bookings', {
+      venueId: v.id,
+      resourceId: other,
+      guestName: 'Uniform',
+      showId: show.id,
+      expectedTotal: 1234,
+      expectedCurrency: 'EUR',
+    });
+    expect(uniform.status).toBe(201);
+    expect((await uniform.json()).price).toBe(1234);
+    const saved = await pool.query('SELECT price,currency FROM bookings WHERE id=$1', [booked.id]);
+    expect(saved.rows[0]).toEqual({ price: total / 2, currency: 'USD' });
+    v.layout.pricing.mode = 'free';
+    await request(
+      `/venues/${v.id}`,
+      { layout: v.layout, name: v.name, revision: v.revision },
+      true,
+      'PUT',
+    );
+    const free = await request('/bookings', {
+      venueId: v.id,
+      resourceId: v.layout.floors[0].resources[3].id,
+      guestName: 'Free',
+      showId: show.id,
+    });
+    expect(free.status).toBe(201);
+    expect((await free.json()).price).toBe(0);
+  });
+  it('creates empty scenes and persists arbitrary object changes without restoring the seed', async () => {
+    const v = await (
+      await request('/venues', { kind: 'stadium', name: 'Custom scene', empty: true }, true)
+    ).json();
+    expect(v.layout.floors).toHaveLength(1);
+    expect(v.layout.floors[0].objects).toEqual([]);
+    expect(v.layout.floors[0].resources).toEqual([]);
+    v.layout.floors[0].width = 80;
+    v.layout.floors[0].objects = [
+      {
+        id: crypto.randomUUID(),
+        kind: 'pitch',
+        label: 'My pitch',
+        x: 40,
+        y: 26,
+        width: 30,
+        depth: 20,
+        height: 2,
+        rotation: 15,
+        color: '#123456',
+      },
+    ];
+    expect(
+      (
+        await request(
+          `/venues/${v.id}`,
+          { layout: v.layout, name: v.name, revision: v.revision },
+          true,
+          'PUT',
+        )
+      ).status,
+    ).toBe(200);
+    const result = (await (await request('/venues')).json()).find((x: any) => x.id === v.id);
+    expect(result.layout.floors[0]).toEqual(v.layout.floors[0]);
+    result.layout.floors[0].objects = [];
+    expect(
+      (
+        await request(
+          `/venues/${v.id}`,
+          { layout: result.layout, name: result.name, revision: result.revision },
+          true,
+          'PUT',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await pool.query('SELECT layout FROM venues WHERE id=$1', [v.id])).rows[0].layout.floors[0]
+        .objects,
+    ).toEqual([]);
+  });
 });

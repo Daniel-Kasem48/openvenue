@@ -1,0 +1,1 @@
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS party_size integer NOT NULL DEFAULT 1 CHECK (party_size BETWEEN 1 AND 50);
