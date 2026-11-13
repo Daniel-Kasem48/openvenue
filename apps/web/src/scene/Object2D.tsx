@@ -2,6 +2,29 @@ import type { SceneObject } from '@openvenue/contracts';
 export function Object2D({ object: o }: { object: SceneObject }) {
   const w = o.width,
     d = o.depth;
+  if (o.kind === 'label')
+    return (
+      <g aria-label={`Block ${o.label}`}>
+        <rect
+          x={-w / 2}
+          y={-d / 2}
+          width={w}
+          height={d}
+          rx={Math.min(w, d) * 0.15}
+          fill={o.color}
+        />
+        <text
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={Math.min(d * 0.7, w / Math.max(o.label.length * 0.65, 1))}
+          fontWeight="700"
+          fill="white"
+          pointerEvents="none"
+        >
+          {o.label}
+        </text>
+      </g>
+    );
   return (
     <>
       {o.kind === 'plant' ? (

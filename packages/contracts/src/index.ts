@@ -12,6 +12,7 @@ const name = z.string().trim().min(1).max(100);
 export const resourceSchema = z.object({
   id: uuid,
   label: name,
+  section: z.string().trim().max(40).default(''),
   kind: z.enum(['table', 'space', 'seat']),
   x: z.number().min(0).max(200),
   y: z.number().min(0).max(200),
@@ -44,6 +45,7 @@ export const objectKinds = [
   'charger',
   'barrier',
   'pitch',
+  'label',
 ] as const;
 export const sceneObjectSchema = resourceSchema
   .pick({ id: true, label: true, x: true, y: true, width: true, depth: true, rotation: true })

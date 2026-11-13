@@ -38,8 +38,7 @@ button:disabled {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible,
-.map-resource:focus-visible {
+select:focus-visible {
   outline: 3px solid #7f9d4c;
   outline-offset: 3px;
 }
@@ -1433,4 +1432,14 @@ dialog select {
   font-size: 10px;
   line-height: 1.5;
   max-width: calc(100% - 165px);
+}
+
+.map-resource:focus-visible {
+  outline: none;
+}
+.resource-focus-ring {
+  visibility: hidden;
+}
+.map-resource:focus-visible > .resource-focus-ring {
+  visibility: visible;
 }

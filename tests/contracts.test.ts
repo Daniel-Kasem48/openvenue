@@ -80,3 +80,16 @@ it('seeds a dense stadium with progressively higher editable rows', () => {
   }
   expect(floor.objects.some((o) => o.label === 'South terrace 16')).toBe(true);
 });
+
+it('seeds editable stadium block labels matching every seat section', () => {
+  const layout = makeTemplate('stadium'),
+    floor = layout.floors[0];
+  const labels = floor.objects.filter((o) => o.kind === 'label');
+  expect(labels).toHaveLength(24);
+  expect(new Set(labels.map((o) => o.label)).size).toBe(24);
+  expect(floor.resources.every((r) => labels.some((o) => o.label === r.section))).toBe(true);
+  expect(labels.map((o) => o.label)).toEqual(
+    expect.arrayContaining(['10', '80', '60', '70', '40', '50', '23', '34']),
+  );
+  expect(layoutSchema.safeParse(layout).success).toBe(true);
+});

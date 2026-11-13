@@ -52,3 +52,24 @@ it('supports elevated seats even when saved stadiums have no terrace objects', (
     expect(d * r.depth).toBeGreaterThanOrEqual(r.depth);
   }
 });
+
+it('shows block numbers and compact seat labels with a tight keyboard focus marker', () => {
+  const floor = makeTemplate('stadium').floors[0];
+  const markup = renderToStaticMarkup(
+    createElement(Map2D, {
+      floor,
+      kind: 'stadium',
+      selected: floor.resources[0].id,
+      busy: [],
+      editing: false,
+      onSelect: () => {},
+      onMove: () => {},
+    }),
+  );
+  expect(markup).toContain('Block 60');
+  expect(markup).toContain('>60</text>');
+  expect(markup).toContain('>A1</text>');
+  expect(markup).not.toContain('>North A1</text>');
+  expect(markup).toContain('class="resource-focus-ring"');
+  expect(markup).toContain('vector-effect="non-scaling-stroke"');
+});

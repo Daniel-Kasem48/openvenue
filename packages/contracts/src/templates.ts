@@ -11,6 +11,7 @@ const item = (
   id: crypto.randomUUID(),
   kind,
   label,
+  section: '',
   x,
   y,
   width,
@@ -31,6 +32,7 @@ export function makeObject(
   overrides: Partial<SceneObject> = {},
 ): SceneObject {
   const dimensions: Record<SceneObject['kind'], [number, number, number, string]> = {
+    label: [4, 2, 3, '#087ba5'],
     pitch: [36, 24, 2, '#438653'],
     plant: [0.8, 0.8, 1.5, '#56805a'],
     counter: [3, 1, 1.1, '#b88a60'],
@@ -71,6 +73,12 @@ export function makeTemplate(kind: VenueKind): Layout {
       makeObject('counter', 5, 73, { label: 'Concessions', width: 6 }),
       makeObject('counter', 75, 73, { label: 'Ticket office', width: 6 }),
     ];
+    const blocks = [
+      ['60', '61', '62', '70', '71', '72'],
+      ['10', '11', '12', '80', '81', '82'],
+      ['40', '42', '43', '50', '52', '54'],
+      ['23', '26', '20', '34', '32', '30'],
+    ];
     for (const [side, section] of ['North', 'South', 'East', 'West'].entries()) {
       const rows = side === 1 ? 16 : 12,
         columns = side < 2 ? 18 : 20;
@@ -99,6 +107,10 @@ export function makeTemplate(kind: VenueKind): Layout {
               0.85,
               0.9,
             ),
+            section:
+              blocks[side][
+                (row >= rows / 2 ? 3 : 0) + Math.min(2, Math.floor((col * 3) / columns))
+              ],
             rotation: [180, 0, 270, 90][side],
             elevation,
             color: side === 1 || row % 4 !== 2 ? '#e6c52c' : '#343c3c',
@@ -122,6 +134,24 @@ export function makeTemplate(kind: VenueKind): Layout {
         ),
       );
     }
+    for (const [side, numbers] of blocks.entries())
+      for (const number of numbers) {
+        const seats = resources.filter((r) => r.section === number);
+        objects.push(
+          makeObject(
+            'label',
+            seats.reduce((n, r) => n + r.x, 0) / seats.length,
+            seats.reduce((n, r) => n + r.y, 0) / seats.length,
+            {
+              label: number,
+              width: 4,
+              depth: 2,
+              height: Math.min(8, Math.max(...seats.map((r) => r.elevation)) + 1.5),
+              color: side < 2 ? '#6b8c23' : '#087ba5',
+            },
+          ),
+        );
+      }
     return {
       version: 1,
       pricing: { mode: 'per-resource', currency: 'USD', amount: 0 },

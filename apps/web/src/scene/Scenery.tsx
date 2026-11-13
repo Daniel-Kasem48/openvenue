@@ -1,3 +1,4 @@
+import { SceneLabel } from './SceneLabel';
 import { StadiumPitch } from './StadiumPitch';
 import { Shape } from 'three';
 import type { SceneObject } from '@openvenue/contracts';
@@ -7,6 +8,7 @@ export function Scenery({ object: o }: { object: SceneObject }) {
   const { width: w, depth: d, height: h, color: c } = o;
   return (
     <group position={[o.x, 0, o.y]} rotation={[0, (-o.rotation * Math.PI) / 180, 0]}>
+      {o.kind === 'label' && <SceneLabel object={o} />}
       {o.kind === 'pitch' && <StadiumPitch width={w} depth={d} height={h} color={c} />}
       {o.kind === 'plant' && (
         <group scale={[w, h / 1.5, d]}>

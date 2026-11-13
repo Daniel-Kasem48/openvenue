@@ -43,7 +43,23 @@ export function LayoutInspector({
       floors: draft.layout.floors.map((f, i) => (i === floorIndex ? { ...f, objects } : f)),
     });
   const patchObject = (patch: Partial<SceneObject>) =>
-    updateObjects((floor.objects ?? []).map((o) => (o.id === selected ? { ...o, ...patch } : o)));
+    updateLayout({
+      ...draft.layout,
+      floors: draft.layout.floors.map((f, i) =>
+        i !== floorIndex
+          ? f
+          : {
+              ...f,
+              objects: f.objects.map((o) => (o.id === selected ? { ...o, ...patch } : o)),
+              resources:
+                object?.kind === 'label' && patch.label !== undefined
+                  ? f.resources.map((r) =>
+                      r.section === object.label ? { ...r, section: patch.label! } : r,
+                    )
+                  : f.resources,
+            },
+      ),
+    });
   return (
     <>
       <div className="eyebrow">LAYOUT STUDIO</div>
@@ -207,7 +223,11 @@ export function LayoutInspector({
         <div className="resource-editor">
           <label>
             Object label
-            <input value={object.label} onChange={(e) => patchObject({ label: e.target.value })} />
+            <input
+              value={object.label}
+              maxLength={object.kind === 'label' ? 40 : 100}
+              onChange={(e) => patchObject({ label: e.target.value })}
+            />
           </label>
           <div className="field-grid">
             {(['x', 'y', 'width', 'depth', 'height', 'rotation'] as const).map((key) => (
@@ -263,6 +283,16 @@ export function LayoutInspector({
                 onChange={(e) =>
                   updateResource({ price: Math.round(Number(e.target.value) * 100) })
                 }
+              />
+            </label>
+          )}
+          {resource.kind === 'seat' && (
+            <label>
+              Section / block
+              <input
+                value={resource.section}
+                maxLength={40}
+                onChange={(e) => updateResource({ section: e.target.value })}
               />
             </label>
           )}

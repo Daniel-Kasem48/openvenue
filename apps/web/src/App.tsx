@@ -92,7 +92,12 @@ export default function App() {
       setSelectedSeats(selectedSeats.filter((s) => s !== id));
       return;
     }
-    if (busy.includes(id) || selectedSeats.length >= partySize) return;
+    if (busy.includes(id)) return;
+    if (partySize === 1) {
+      setSelectedSeats([id]);
+      return;
+    }
+    if (selectedSeats.length >= partySize) return;
     setSelectedSeats([...selectedSeats, id]);
   };
   const activeShow = shows.find((s) => s.id === showId);
@@ -294,7 +299,9 @@ export default function App() {
       setStep('done');
       setRefresh((v) => v + 1);
       setGuest('');
-      setMessage(`Reservation confirmed for ${bookingResources.map((r) => r.label).join(', ')}.`);
+      setMessage(
+        `Reservation confirmed for ${bookingResources.map((r) => `${r.section ? `Block ${r.section} · ` : ''}${r.label}`).join(', ')}.`,
+      );
     });
   const showBookings = () =>
     run(async () => {
@@ -329,6 +336,7 @@ export default function App() {
     const r: Resource = {
       id: crypto.randomUUID(),
       kind: type,
+      section: '',
       label: `${type === 'table' ? 'Table' : type === 'space' ? 'Space' : 'Seat'} ${floor.resources.length + 1}`,
       x: floor.width / 2,
       y: floor.depth / 2,
@@ -997,7 +1005,9 @@ export default function App() {
                         </span>
                         <strong>
                           {bookingResources.length
-                            ? bookingResources.map((r) => r.label).join(', ')
+                            ? bookingResources
+                                .map((r) => `${r.section ? `Block ${r.section} · ` : ''}${r.label}`)
+                                .join(', ')
                             : 'Your spot is waiting'}
                         </strong>
                         <small>
@@ -1068,7 +1078,13 @@ export default function App() {
                         <label>
                           Resource
                           <select
-                            value={seatVenue ? '' : selected}
+                            value={
+                              seatVenue
+                                ? (selectedSeats
+                                    .filter((id) => floor.resources.some((r) => r.id === id))
+                                    .at(-1) ?? '')
+                                : selected
+                            }
                             onChange={(e) => selectPlace(e.target.value)}
                           >
                             <option value="">Select a resource</option>
@@ -1081,6 +1097,7 @@ export default function App() {
                                 }
                               >
                                 {r.label}
+                                {r.section ? ` · Block ${r.section}` : ''}
                                 {selectedSeats.includes(r.id) ? ' · Selected' : ''}
                                 {venue?.layout.pricing.mode !== 'free'
                                   ? ` · ${formatPrice(reservationPrice(venue!.layout, r), currency)}`

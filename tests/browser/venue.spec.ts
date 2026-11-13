@@ -298,6 +298,7 @@ test('stadium is editable data, supports seat counts and saves per-seat prices',
   await select.selectOption(venue.layout.floors[0].resources[0].id);
   await expect(page.getByRole('button', { name: 'Review reservation' })).toBeDisabled();
   await select.selectOption(venue.layout.floors[0].resources[1].id);
+  await expect(select).toHaveValue(venue.layout.floors[0].resources[1].id);
   await page.screenshot({ path: '/tmp/openvenue-stadium.png', fullPage: true });
   await page.getByRole('button', { name: 'Review reservation' }).click();
   await expect(page.getByLabel('Reservation price summary')).toContainText('$57.50');
@@ -501,4 +502,67 @@ test('selection and review preserve a manually panned and zoomed camera', async 
   (await page.evaluate(() => (window as any).__cameraView)).forEach((value: number, i: number) =>
     expect(Math.abs(value - pose[i])).toBeLessThan(i < 12 ? 0.0001 : 0.02),
   );
+});
+
+test('stadium block numbers persist and keyboard focus stays close to the seat', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90000);
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Numbered stadium ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { name, kind: 'stadium' } })
+  ).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout' }).click();
+  const seat = page.getByRole('button', { name: 'Select North A1', exact: true });
+  await page.keyboard.press('Tab');
+  await seat.focus();
+  await expect(seat).toHaveCSS('outline-style', 'none');
+  await expect(seat.locator('.resource-focus-ring')).toHaveCSS('visibility', 'visible');
+  const bounds = await seat
+    .locator('.resource-focus-ring')
+    .evaluate((e) => ({ width: e.getAttribute('width'), height: e.getAttribute('height') }));
+  expect(Number(bounds.width)).toBeLessThan(1);
+  expect(Number(bounds.height)).toBeLessThan(1.1);
+  await page.getByRole('button', { name: 'Select block 60', exact: true }).click();
+  await page.getByLabel('Object label').fill('160');
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await page.reload();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption(venue.layout.floors[0].resources[0].id);
+  await expect(page.locator('.selection-card strong')).toContainText('Block 160');
+  await page.screenshot({ path: '/tmp/openvenue-numbered-stadium.png', fullPage: true });
+  const resourceInput = page.getByRole('combobox', { name: 'Resource', exact: true });
+  await expect(resourceInput).toHaveValue(venue.layout.floors[0].resources[0].id);
+  await page.getByRole('button', { name: '2D view' }).click();
+  await expect(page.locator('svg text').filter({ hasText: /^160$/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Select North A2', exact: true }).click();
+  await page.getByRole('button', { name: '3D view' }).click();
+  await expect(resourceInput).toHaveValue(venue.layout.floors[0].resources[1].id);
+  await expect(page.locator('.selection-card strong')).toContainText('North A2');
+  await page.getByRole('button', { name: 'Remove North A2', exact: true }).click();
+  await expect(resourceInput).toHaveValue('');
+  const saved = (await (await request.get('/api/venues')).json()).find(
+    (v: any) => v.id === venue.id,
+  );
+  expect(saved.layout.floors[0].resources[0].section).toBe('160');
+  expect(
+    saved.layout.floors[0].objects.some((o: any) => o.kind === 'label' && o.label === '160'),
+  ).toBe(true);
 });

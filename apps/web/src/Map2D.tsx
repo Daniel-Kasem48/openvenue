@@ -104,45 +104,48 @@ export default function Map2D({
           height={floor.depth - 0.2}
           fill="url(#grid)"
         />
-        {(floor.objects ?? []).map((o) => (
-          <g
-            key={o.id}
-            transform={'translate(' + o.x + ' ' + o.y + ') rotate(' + o.rotation + ')'}
-            role={editing ? 'button' : undefined}
-            tabIndex={editing ? 0 : undefined}
-            aria-label={editing ? 'Select ' + o.label : undefined}
-            onKeyDown={(e) => {
-              if (editing && (e.key === 'Enter' || e.key === ' ')) {
-                e.preventDefault();
-                onSelect(o.id);
-              }
-            }}
-            onPointerDown={(e) => {
-              if (editing) start(e, o);
-            }}
-            style={{
-              pointerEvents: editing ? 'auto' : 'none',
-              cursor: editing ? 'grab' : 'default',
-            }}
-          >
-            <Object2D object={o} />
-            {selected === o.id && (
-              <rect
-                x={-o.width / 2 - 0.08}
-                y={-o.depth / 2 - 0.08}
-                width={o.width + 0.16}
-                height={o.depth + 0.16}
-                fill="none"
-                stroke="#476a40"
-                strokeWidth=".07"
-                strokeDasharray=".15 .08"
-              />
-            )}
-          </g>
-        ))}
+        {(floor.objects ?? [])
+          .filter((o) => o.kind !== 'label')
+          .map((o) => (
+            <g
+              key={o.id}
+              transform={'translate(' + o.x + ' ' + o.y + ') rotate(' + o.rotation + ')'}
+              role={editing ? 'button' : undefined}
+              tabIndex={editing ? 0 : undefined}
+              aria-label={editing ? 'Select ' + o.label : undefined}
+              onKeyDown={(e) => {
+                if (editing && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  onSelect(o.id);
+                }
+              }}
+              onPointerDown={(e) => {
+                if (editing) start(e, o);
+              }}
+              style={{
+                pointerEvents: editing ? 'auto' : 'none',
+                cursor: editing ? 'grab' : 'default',
+              }}
+            >
+              <Object2D object={o} />
+              {selected === o.id && (
+                <rect
+                  x={-o.width / 2 - 0.08}
+                  y={-o.depth / 2 - 0.08}
+                  width={o.width + 0.16}
+                  height={o.depth + 0.16}
+                  fill="none"
+                  stroke="#476a40"
+                  strokeWidth=".07"
+                  strokeDasharray=".15 .08"
+                />
+              )}
+            </g>
+          ))}
         {floor.resources.map((r) => {
           const unavailable = busy.includes(r.id),
             active = selected === r.id || selectedIds.includes(r.id);
+          const seatLabel = r.label.match(/[A-Z]+\d+$/)?.[0] ?? r.label;
           return (
             <g
               key={r.id}
@@ -161,6 +164,23 @@ export default function Map2D({
               className="map-resource"
               style={{ cursor: editing ? 'grab' : 'pointer' }}
             >
+              <title>
+                {r.section ? `Block ${r.section} · ` : ''}
+                {r.label}
+              </title>
+              <rect
+                className="resource-focus-ring"
+                x={-r.width / 2 - 0.06}
+                y={-r.depth / 2 - 0.06}
+                width={r.width + 0.12}
+                height={r.depth + 0.12}
+                rx="0.08"
+                fill="none"
+                stroke="#315d38"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
               {r.kind === 'table' &&
                 Array.from({ length: r.capacity > 2 ? 4 : 2 }, (_, i) => (
                   <rect
@@ -207,12 +227,16 @@ export default function Map2D({
                 y={r.kind === 'seat' ? 0.08 : 0}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={r.kind === 'seat' ? 0.27 : 0.38}
+                fontSize={
+                  r.kind === 'seat'
+                    ? Math.min(0.23, r.width / (Math.max(seatLabel.length, 1) * 0.7))
+                    : 0.38
+                }
                 fill="#274233"
                 fontWeight="600"
                 pointerEvents="none"
               >
-                {r.label}
+                {r.kind === 'seat' ? seatLabel : r.label}
               </text>
               {r.kind !== 'seat' && (
                 <text
@@ -234,6 +258,44 @@ export default function Map2D({
             </g>
           );
         })}
+        {(floor.objects ?? [])
+          .filter((o) => o.kind === 'label')
+          .map((o) => (
+            <g
+              key={o.id}
+              transform={`translate(${o.x} ${o.y}) rotate(${o.rotation})`}
+              role={editing ? 'button' : undefined}
+              tabIndex={editing ? 0 : undefined}
+              aria-label={editing ? `Select block ${o.label}` : `Block ${o.label}`}
+              style={{
+                pointerEvents: editing ? 'auto' : 'none',
+                cursor: editing ? 'grab' : 'default',
+              }}
+              onPointerDown={(e) => {
+                if (editing) start(e, o);
+              }}
+              onKeyDown={(e) => {
+                if (editing && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  onSelect(o.id);
+                }
+              }}
+            >
+              <Object2D object={o} />
+              {selected === o.id && (
+                <rect
+                  x={-o.width / 2}
+                  y={-o.depth / 2}
+                  width={o.width}
+                  height={o.depth}
+                  fill="none"
+                  stroke="#315d38"
+                  strokeWidth="1.5"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+            </g>
+          ))}
         <text x={floor.width / 2} y={floor.depth + 1} textAnchor="middle" className="map-caption">
           ENTRANCE ↑
         </text>
