@@ -7,11 +7,12 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 
 ## What works
 
-- Restaurant: 12 tables with editable capacity; time-based reservations.
-- Parking: 32 spaces across two floors, including accessible and EV spaces.
-- Cinema: 48 seats, rows, screen, and administrator-created showtimes.
+- Restaurant: a furnished bistro with 12 round/rectangular tables, chairs, place settings, cocktail bar, reception and lounge.
+- Parking: 32 spaces across two floors, EV chargers, accessible bays, security booth, entry barrier, ramps, stairs and staff vehicles.
+- Cinema: 48 upholstered seats with armrests, screen, acoustic partitions, foyer, concessions and administrator-created showtimes.
 - SVG map editor: drag, numeric position/size/rotation, labels, floors, resources.
-- Three.js viewer: the same layout, orbit, zoom, selection and availability.
+- 3D opens by default: rounded furniture, detailed vehicles, shaded materials, orbit/zoom, camera fitting, selection and availability. Editing switches to 2D.
+- Twelve editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers and barriers. Position, size, height, rotation and color persist in the shared layout.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.
 - Administrator sign-in, reservation list and cancellation. Guest names are private.
@@ -72,7 +73,7 @@ tests/                Contract tests and real PostgreSQL integration tests
 ```
 
 React + TypeScript + Vite, NestJS + Express, PostgreSQL + `pg`, Zod,
-Three.js + React Three Fiber. One API process, one database, no Redis or queues.
+Three.js + React Three Fiber. Models are original procedural geometry, with no remote models or texture downloads. One API process, one database, no Redis or queues.
 REST routes are grouped by venues, shows and bookings. Shared contracts validate
 all writes. The scene stays JSONB; resources are indexed relationally for booking
 integrity. `revision` prevents stale layout writes. Venue row locks serialize
@@ -94,7 +95,7 @@ Without `TEST_DATABASE_URL`, `npm test` explicitly skips the database suite.
 npm run format:check
 npm run build
 TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/openvenue_test npm test
-# Browser tests start their own servers on ports 5188 and 3188.
+# Browser tests build the production frontend and start an isolated API on port 3189.
 # Use the test password below only with a dedicated test database.
 npx playwright install chromium
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/openvenue_test \
@@ -118,7 +119,8 @@ limits use the direct client address (a proxy shares its limit); forwarded heade
 are intentionally not trusted by default. Configure deployment-specific trusted
 proxy handling before high-volume use behind a proxy.
 
-- 3D uses schematic geometry and needs WebGL; 2D remains available.
+- 3D uses stylized procedural models and needs WebGL; 2D remains available. Table models display up to eight chairs.
+- Existing saved layouts remain compatible; create a new venue to use the richer furnished templates. Scenery is decorative and is not bookable.
 - Availability refreshes every 15 seconds and is rechecked at booking time.
 - One resource per reservation, at most seven days; no payments or ticket issuance.
 - Cinema showtimes apply to the venue; no multi-auditorium scheduling in this MVP.

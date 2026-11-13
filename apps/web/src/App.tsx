@@ -27,7 +27,7 @@ export default function App() {
     [draft, setDraft] = useState<Venue | null>(null);
   const [floorIndex, setFloorIndex] = useState(0),
     [selected, setSelected] = useState(''),
-    [view, setView] = useState<'2d' | '3d'>('2d');
+    [view, setView] = useState<'2d' | '3d'>('3d');
   const [admin, setAdmin] = useState(false),
     [editing, setEditing] = useState(false),
     [dirty, setDirty] = useState(false),
@@ -85,7 +85,7 @@ export default function App() {
   };
   const load = async () => {
     const data = await api<Venue[]>('/venues');
-    setVenues(data);
+    setVenues(data.map((v) => ({ ...v, layout: layoutSchema.parse(v.layout) })));
     setVenueId((id) => id || data.find((v) => v.kind === 'restaurant')?.id || data[0]?.id || '');
     setLoaded(true);
   };
@@ -151,6 +151,7 @@ export default function App() {
   const chooseVenue = (id: string) => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
     setVenueId(id);
+    setView('3d');
     setFloorIndex(0);
     setSelected('');
     setEditing(false);
@@ -184,7 +185,11 @@ export default function App() {
       ...draft.layout,
       floors: draft.layout.floors.map((f, i) =>
         i === floorIndex
-          ? { ...f, resources: f.resources.map((r) => (r.id === id ? { ...r, x, y } : r)) }
+          ? {
+              ...f,
+              resources: f.resources.map((r) => (r.id === id ? { ...r, x, y } : r)),
+              objects: (f.objects ?? []).map((o) => (o.id === id ? { ...o, x, y } : o)),
+            }
           : f,
       ),
     });
@@ -275,6 +280,7 @@ export default function App() {
       width: type === 'space' ? 2.6 : type === 'table' ? 2 : 0.9,
       depth: type === 'space' ? 5 : type === 'table' ? 1.6 : 1,
       rotation: 0,
+      shape: 'rectangle',
       capacity: type === 'table' ? 4 : 1,
       accessible: false,
       ev: false,
@@ -604,6 +610,7 @@ export default function App() {
                     <SceneBoundary key={floor.id}>
                       <Suspense fallback={<div className="empty">Preparing your 3D space…</div>}>
                         <Map3D
+                          key={floor.id}
                           floor={floor}
                           kind={current.kind}
                           selected={selected}
@@ -861,10 +868,10 @@ export default function App() {
               <strong>{types[kind].name}</strong>
               <p>
                 {kind === 'restaurant'
-                  ? '12 tables · 40 guests · 1 dining room'
+                  ? 'Bistro · dining, cocktail bar & lounge'
                   : kind === 'parking'
-                    ? '32 spaces · 2 floors · EV & accessible spaces'
-                    : '48 seats · 6 rows · 1 screen'}
+                    ? 'Garage · 2 levels, EV bays, ramp & security'
+                    : 'Cinema · 48 seats, foyer & concessions'}
               </p>
             </div>
             {error && <p className="field-error">{error}</p>}

@@ -12,28 +12,52 @@ export const resourceSchema = z.object({
   width: z.number().min(0.3).max(20),
   depth: z.number().min(0.3).max(20),
   rotation: z.number().min(0).max(360),
+  shape: z.enum(['rectangle', 'round']).default('rectangle'),
   capacity: z.number().int().min(1).max(50),
   accessible: z.boolean(),
   ev: z.boolean(),
 });
 export type Resource = z.infer<typeof resourceSchema>;
+export const objectKinds = [
+  'plant',
+  'counter',
+  'sofa',
+  'partition',
+  'column',
+  'door',
+  'screen',
+  'stairs',
+  'ramp',
+  'car',
+  'charger',
+  'barrier',
+] as const;
+export const sceneObjectSchema = resourceSchema
+  .pick({ id: true, label: true, x: true, y: true, width: true, depth: true, rotation: true })
+  .extend({
+    kind: z.enum(objectKinds),
+    height: z.number().min(0.1).max(8),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  });
+export type SceneObject = z.infer<typeof sceneObjectSchema>;
 export const floorSchema = z.object({
   id: uuid,
   name,
   width: z.number().min(5).max(200),
   depth: z.number().min(5).max(200),
   resources: z.array(resourceSchema).max(1000),
+  objects: z.array(sceneObjectSchema).max(300).default([]),
 });
 export const layoutSchema = z
   .object({ version: z.literal(1), floors: z.array(floorSchema).min(1).max(10) })
   .superRefine((layout, ctx) => {
     const ids = new Set<string>();
     for (const floor of layout.floors) {
-      for (const id of [floor.id, ...floor.resources.map((r) => r.id)]) {
+      for (const id of [floor.id, ...[...floor.resources, ...floor.objects].map((r) => r.id)]) {
         if (ids.has(id)) ctx.addIssue({ code: 'custom', message: 'Identifiers must be unique' });
         ids.add(id);
       }
-      for (const r of floor.resources) {
+      for (const r of [...floor.resources, ...floor.objects]) {
         const angle = (r.rotation * Math.PI) / 180;
         const extentX =
           (Math.abs(r.width * Math.cos(angle)) + Math.abs(r.depth * Math.sin(angle))) / 2;
@@ -90,4 +114,4 @@ export const bookingSchema = z.object({
   end: z.iso.datetime({ offset: true }).optional(),
   showId: uuid.optional(),
 });
-export { makeTemplate, cloneLayout } from './templates';
+export { makeTemplate, cloneLayout, makeObject } from './templates';

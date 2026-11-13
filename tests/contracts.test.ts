@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutSchema, makeTemplate } from '@openvenue/contracts';
+import { cloneLayout, layoutSchema, makeTemplate } from '@openvenue/contracts';
 describe('venue templates and layout boundary', () => {
   for (const kind of ['restaurant', 'parking', 'cinema'] as const) {
     it(`provides a valid independent ${kind} template`, () => {
@@ -35,4 +35,25 @@ it('normalizes UUID case before checking uniqueness', () => {
   expect(parsed.floors[0].resources[0].id).toBe(id.toLowerCase());
   layout.floors[0].resources.push({ ...layout.floors[0].resources[0], id: id.toLowerCase() });
   expect(layoutSchema.safeParse(layout).success).toBe(false);
+});
+
+it('provides realistic furnished templates and clones every object independently', () => {
+  for (const kind of ['restaurant', 'parking', 'cinema'] as const) {
+    const layout = makeTemplate(kind);
+    expect(cloneLayout(layout).floors[0].objects[0].id).not.toBe(layout.floors[0].objects[0].id);
+    expect(layout.floors[0].objects?.length).toBeGreaterThan(5);
+    expect(new Set(layout.floors[0].objects.map((o) => o.kind)).size).toBeGreaterThan(3);
+    expect(layoutSchema.safeParse(layout).success).toBe(true);
+  }
+});
+it('supports old layouts and validates scenery bounds and unique IDs', () => {
+  const old = makeTemplate('restaurant');
+  delete (old.floors[0] as any).objects;
+  expect(layoutSchema.parse(old).floors[0].objects).toEqual([]);
+  const scene = makeTemplate('cinema');
+  scene.floors[0].objects[0].id = scene.floors[0].resources[0].id;
+  expect(layoutSchema.safeParse(scene).success).toBe(false);
+  scene.floors[0].objects[0].id = crypto.randomUUID();
+  scene.floors[0].objects[0].x = 500;
+  expect(layoutSchema.safeParse(scene).success).toBe(false);
 });

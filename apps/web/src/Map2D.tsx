@@ -1,5 +1,6 @@
+import { Object2D } from './scene/Object2D';
 import { useRef, useState } from 'react';
-import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
+import type { Floor, Resource, SceneObject, VenueKind } from '@openvenue/contracts';
 type Props = {
   floor: Floor;
   kind: VenueKind;
@@ -22,7 +23,7 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
     p.y = event.clientY;
     return p.matrixTransform(svg.getScreenCTM()!.inverse());
   };
-  const start = (event: React.PointerEvent, r: Resource) => {
+  const start = (event: React.PointerEvent, r: Resource | SceneObject) => {
     event.stopPropagation();
     onSelect(r.id);
     if (editing) {
@@ -34,7 +35,7 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
   const move = (event: React.PointerEvent) => {
     if (drag.current) {
       const p = point(event),
-        r = floor.resources.find((r) => r.id === drag.current!.id)!;
+        r = [...floor.resources, ...(floor.objects ?? [])].find((r) => r.id === drag.current!.id)!;
       const a = (r.rotation * Math.PI) / 180,
         ex = (Math.abs(r.width * Math.cos(a)) + Math.abs(r.depth * Math.sin(a))) / 2,
         ey = (Math.abs(r.width * Math.sin(a)) + Math.abs(r.depth * Math.cos(a))) / 2;
@@ -93,7 +94,7 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
           height={floor.depth - 0.2}
           fill="url(#grid)"
         />
-        {kind === 'cinema' && (
+        {kind === 'cinema' && !(floor.objects ?? []).some((o) => o.kind === 'screen') && (
           <>
             <rect
               x={floor.width * 0.2}
@@ -126,6 +127,42 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
             </text>
           </>
         )}
+        {(floor.objects ?? []).map((o) => (
+          <g
+            key={o.id}
+            transform={'translate(' + o.x + ' ' + o.y + ') rotate(' + o.rotation + ')'}
+            role={editing ? 'button' : undefined}
+            tabIndex={editing ? 0 : undefined}
+            aria-label={editing ? 'Select ' + o.label : undefined}
+            onKeyDown={(e) => {
+              if (editing && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onSelect(o.id);
+              }
+            }}
+            onPointerDown={(e) => {
+              if (editing) start(e, o);
+            }}
+            style={{
+              pointerEvents: editing ? 'auto' : 'none',
+              cursor: editing ? 'grab' : 'default',
+            }}
+          >
+            <Object2D object={o} />
+            {selected === o.id && (
+              <rect
+                x={-o.width / 2 - 0.08}
+                y={-o.depth / 2 - 0.08}
+                width={o.width + 0.16}
+                height={o.depth + 0.16}
+                fill="none"
+                stroke="#476a40"
+                strokeWidth=".07"
+                strokeDasharray=".15 .08"
+              />
+            )}
+          </g>
+        ))}
         {floor.resources.map((r) => {
           const unavailable = busy.includes(r.id),
             active = selected === r.id;
@@ -159,16 +196,26 @@ export default function Map2D({ floor, kind, selected, busy, editing, onSelect, 
                     fill={active ? '#c9df92' : '#d4ddd2'}
                   />
                 ))}
-              <rect
-                x={-r.width / 2}
-                y={-r.depth / 2}
-                width={r.width}
-                height={r.depth}
-                rx={r.kind === 'space' ? 0.08 : 0.22}
-                fill={active ? '#d9ecae' : unavailable ? '#eee0d5' : '#e0e9dd'}
-                stroke={active ? '#35543a' : unavailable ? '#bb9d85' : '#94ac91'}
-                strokeWidth={active ? 0.1 : 0.05}
-              />
+              {r.shape === 'round' ? (
+                <ellipse
+                  rx={r.width / 2}
+                  ry={r.depth / 2}
+                  fill={active ? '#e8cfa2' : unavailable ? '#dcc0ac' : '#d6ba91'}
+                  stroke={active ? '#536d3e' : '#ab8d65'}
+                  strokeWidth=".06"
+                />
+              ) : (
+                <rect
+                  x={-r.width / 2}
+                  y={-r.depth / 2}
+                  width={r.width}
+                  height={r.depth}
+                  rx={r.kind === 'space' ? 0.08 : 0.22}
+                  fill={active ? '#d9ecae' : unavailable ? '#eee0d5' : '#e0e9dd'}
+                  stroke={active ? '#35543a' : unavailable ? '#bb9d85' : '#94ac91'}
+                  strokeWidth={active ? 0.1 : 0.05}
+                />
+              )}
               {r.kind === 'seat' && (
                 <rect
                   x={-r.width / 2 + 0.05}

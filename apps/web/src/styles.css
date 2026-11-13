@@ -1126,3 +1126,111 @@ dialog select {
     font-size: 11px;
   }
 }
+.three-stage {
+  min-height: 560px;
+}
+.scene-caption {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #344f45;
+}
+.scene-tag {
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  color: #6a856e;
+  font-weight: 700;
+}
+.scene-caption strong {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.scene-caption small {
+  font-size: 10px;
+  color: #708576;
+}
+.camera-reset {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  background: #fffff4e8;
+  padding: 10px 13px;
+  border: 1px solid #cbd4c3;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.object-label {
+  display: block;
+  white-space: nowrap;
+  border-radius: 5px;
+  background: #fffff4ee;
+  color: #344f45;
+  padding: 7px 11px;
+  font-size: 11px;
+  box-shadow: 0 3px 15px #17292422;
+}
+.cinema-stage .scene-caption {
+  color: #e1e2ed;
+}
+.cinema-stage .scene-caption small,
+.cinema-stage .scene-tag,
+.cinema-stage .map-scale {
+  color: #afb6cb;
+}
+.object-library {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+  margin: 10px 0;
+}
+.object-library summary {
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.object-palette {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 12px;
+}
+.object-palette button {
+  font-size: 10px;
+  padding: 8px 3px;
+  background: #f0f3e8;
+  border: 1px solid #e0e6d5;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+.object-palette button:hover {
+  background: #e1eacb;
+}
+.view-toggle button {
+  padding: 8px 14px;
+  font-size: 11px;
+}
+.view-toggle button.active {
+  box-shadow: 0 0 0 1px #8fa47c;
+}
+@media (max-width: 640px) {
+  .three-stage {
+    min-height: 410px;
+    height: 410px;
+  }
+  .scene-caption {
+    top: 15px;
+    left: 15px;
+  }
+  .scene-caption strong {
+    font-size: 15px;
+  }
+  .three-stage .map-scale {
+    max-width: 175px;
+    line-height: 1.5;
+  }
+}

@@ -1,4 +1,12 @@
-import type { Venue, Floor, Resource, Layout } from '@openvenue/contracts';
+import {
+  makeObject,
+  objectKinds,
+  type SceneObject,
+  type Venue,
+  type Floor,
+  type Resource,
+  type Layout,
+} from '@openvenue/contracts';
 type Props = {
   draft: Venue;
   floor: Floor;
@@ -27,6 +35,14 @@ export function LayoutInspector({
   exportLayout,
   importLayout,
 }: Props) {
+  const object = (floor.objects ?? []).find((o) => o.id === selected);
+  const updateObjects = (objects: SceneObject[]) =>
+    updateLayout({
+      ...draft.layout,
+      floors: draft.layout.floors.map((f, i) => (i === floorIndex ? { ...f, objects } : f)),
+    });
+  const patchObject = (patch: Partial<SceneObject>) =>
+    updateObjects((floor.objects ?? []).map((o) => (o.id === selected ? { ...o, ...patch } : o)));
   return (
     <>
       <div className="eyebrow">LAYOUT STUDIO</div>
@@ -50,6 +66,7 @@ export function LayoutInspector({
                   width: floor.width,
                   depth: floor.depth,
                   resources: [],
+                  objects: [],
                 },
               ],
             });
@@ -74,6 +91,64 @@ export function LayoutInspector({
           }
         />
       </label>
+      <details className="object-library" open>
+        <summary>Object library · 12 types</summary>
+        <div className="object-palette">
+          {objectKinds.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                const o = makeObject(kind, floor.width / 2, floor.depth / 2);
+                o.width = Math.min(o.width, floor.width - 1);
+                o.depth = Math.min(o.depth, floor.depth - 1);
+                updateObjects([...(floor.objects ?? []), o]);
+                setSelected(o.id);
+              }}
+            >
+              + {kind}
+            </button>
+          ))}
+        </div>
+      </details>
+      {object && (
+        <div className="resource-editor">
+          <label>
+            Object label
+            <input value={object.label} onChange={(e) => patchObject({ label: e.target.value })} />
+          </label>
+          <div className="field-grid">
+            {(['x', 'y', 'width', 'depth', 'height', 'rotation'] as const).map((key) => (
+              <label key={key}>
+                {key}
+                <input
+                  type="number"
+                  step="0.1"
+                  value={object[key]}
+                  onChange={(e) => patchObject({ [key]: Number(e.target.value) })}
+                />
+              </label>
+            ))}
+          </div>
+          <label>
+            Object color
+            <input
+              type="color"
+              value={object.color}
+              onChange={(e) => patchObject({ color: e.target.value })}
+            />
+          </label>
+          <button
+            className="text-button danger"
+            onClick={() => {
+              updateObjects((floor.objects ?? []).filter((o) => o.id !== selected));
+              setSelected('');
+            }}
+          >
+            Remove object
+          </button>
+        </div>
+      )}
       {resource && (
         <div className="resource-editor">
           <label>
@@ -83,6 +158,18 @@ export function LayoutInspector({
               onChange={(e) => updateResource({ label: e.target.value })}
             />
           </label>
+          {resource.kind === 'table' && (
+            <label>
+              Table shape
+              <select
+                value={resource.shape ?? 'rectangle'}
+                onChange={(e) => updateResource({ shape: e.target.value as Resource['shape'] })}
+              >
+                <option value="rectangle">Rectangle</option>
+                <option value="round">Round / oval</option>
+              </select>
+            </label>
+          )}
           <div className="field-grid">
             {(['x', 'y', 'width', 'depth', 'rotation', 'capacity'] as const).map((key) => (
               <label key={key}>

@@ -1,6 +1,76 @@
+import { Suspense, useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
-import type { Floor, VenueKind } from '@openvenue/contracts';
+import { Bounds, OrbitControls, useBounds, useCursor } from '@react-three/drei';
+import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
+import { CinemaChair, DiningTable, ParkingBay } from './scene/Models';
+import { Scenery } from './scene/Scenery';
+function FitCamera({ revision }: { revision: number }) {
+  const bounds = useBounds();
+  useEffect(() => {
+    bounds.refresh().reset().fit();
+  }, [bounds, revision]);
+  return null;
+}
+function ResourceModel({
+  resource: r,
+  floor,
+  selected,
+  reserved,
+  onSelect,
+}: {
+  resource: Resource;
+  floor: Floor;
+  selected: boolean;
+  reserved: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
+  const color = selected
+    ? '#a6bc65'
+    : reserved
+      ? '#b48675'
+      : r.kind === 'seat'
+        ? '#985864'
+        : r.kind === 'space'
+          ? r.ev
+            ? '#5d9e86'
+            : r.accessible
+              ? '#5b8caa'
+              : '#a6ada5'
+          : '#4c7167';
+  return (
+    <group
+      position={[r.x - floor.width / 2, 0, r.y - floor.depth / 2]}
+      rotation={[0, (-r.rotation * Math.PI) / 180, 0]}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+      }}
+      onPointerOut={() => setHovered(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(r.id);
+      }}
+    >
+      {(selected || hovered) && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.017, 0]}>
+          <planeGeometry args={[r.width + 0.5, r.depth + 0.5]} />
+          <meshBasicMaterial color={selected ? '#c4d991' : '#e5d8aa'} transparent opacity={0.6} />
+        </mesh>
+      )}
+      {r.kind === 'table' ? (
+        <DiningTable resource={r} color={color} />
+      ) : r.kind === 'seat' ? (
+        <group scale={[r.width / 0.9, 1, r.depth]}>
+          <CinemaChair color={color} />
+        </group>
+      ) : (
+        <ParkingBay resource={r} color={color} reserved={reserved} />
+      )}
+    </group>
+  );
+}
 export default function Map3D({
   floor,
   kind,
@@ -15,95 +85,159 @@ export default function Map3D({
   onSelect: (id: string) => void;
 }) {
   const size = Math.max(floor.width, floor.depth);
+  const [cameraRevision, setCameraRevision] = useState(0);
+  const dark = kind === 'cinema';
   return (
-    <div className="map-stage three-stage" aria-label="3D floor plan">
-      <Canvas shadows camera={{ position: [size * 0.8, size * 0.9, size * 0.9], fov: 45 }}>
-        <color attach="background" args={['#f0f3ed']} />
-        <ambientLight intensity={1.4} />
-        <directionalLight
-          position={[8, 20, 10]}
-          intensity={2.2}
-          castShadow
-          shadow-mapSize={[1024, 1024]}
-        />
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[floor.width, floor.depth]} />
-          <meshStandardMaterial color="#fafbf5" />
-        </mesh>
-        <mesh position={[0, 0.2, -floor.depth / 2]}>
-          <boxGeometry args={[floor.width, 0.4, 0.15]} />
-          <meshStandardMaterial color="#a6b5a6" />
-        </mesh>
-        <mesh position={[-floor.width / 2, 0.2, 0]}>
-          <boxGeometry args={[0.15, 0.4, floor.depth]} />
-          <meshStandardMaterial color="#a6b5a6" />
-        </mesh>
-        {kind === 'cinema' && (
-          <mesh position={[0, 1.3, 1 - floor.depth / 2]}>
-            <boxGeometry args={[floor.width * 0.6, 2, 0.15]} />
-            <meshStandardMaterial color="#eee9d5" />
-          </mesh>
+    <div
+      className={'map-stage three-stage ' + (dark ? 'cinema-stage' : '')}
+      aria-label="3D floor plan"
+    >
+      <div className="scene-caption">
+        <span className="scene-tag">LIVE 3D</span>
+        <strong>
+          {kind === 'restaurant'
+            ? 'A place to gather'
+            : kind === 'parking'
+              ? 'A smoother arrival'
+              : 'The best seat in the house'}
+        </strong>
+        <small>
+          {floor.name} · {floor.resources.length} bookable places
+        </small>
+        {selected && (
+          <span className="object-label">
+            Selected: {floor.resources.find((r) => r.id === selected)?.label}
+          </span>
         )}
-        {floor.resources.map((r) => {
-          const color = selected === r.id ? '#a9cd66' : busy.includes(r.id) ? '#c8ac97' : '#90ab8b',
-            height = r.kind === 'table' ? 0.8 : r.kind === 'seat' ? 0.5 : 0.04;
-          return (
-            <group
-              key={r.id}
-              position={[r.x - floor.width / 2, 0, r.y - floor.depth / 2]}
-              rotation={[0, (-r.rotation * Math.PI) / 180, 0]}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(r.id);
-              }}
-            >
-              <mesh castShadow receiveShadow position={[0, height, 0]}>
-                <boxGeometry
-                  args={[
-                    r.width,
-                    r.kind === 'table' ? 0.14 : r.kind === 'seat' ? 0.35 : 0.06,
-                    r.depth,
-                  ]}
+      </div>
+      <Canvas
+        frameloop="demand"
+        shadows
+        dpr={[1, 1.5]}
+        camera={{ position: [size * 0.65, size * 0.75, size * 0.85], fov: 42 }}
+        gl={{ antialias: true }}
+      >
+        <color attach="background" args={[dark ? '#232b39' : '#e8ece5']} />
+        <hemisphereLight args={[dark ? '#d5d9f2' : '#fff6e5', dark ? '#42445c' : '#a6b5a0', 2]} />
+        <directionalLight
+          position={[8, 18, 10]}
+          intensity={dark ? 2 : 3.2}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-size}
+          shadow-camera-right={size}
+          shadow-camera-top={size}
+          shadow-camera-bottom={-size}
+          shadow-bias={-0.0005}
+        />
+        <Suspense fallback={null}>
+          <Bounds fit clip observe margin={1.15} maxDuration={0.35}>
+            <FitCamera revision={cameraRevision} />
+            <group>
+              <mesh receiveShadow position={[0, -0.15, 0]}>
+                <boxGeometry args={[floor.width + 0.4, 0.3, floor.depth + 0.4]} />
+                <meshStandardMaterial
+                  color={dark ? '#333545' : kind === 'parking' ? '#747e80' : '#d4c5ac'}
+                  roughness={0.92}
                 />
-                <meshStandardMaterial color={color} />
               </mesh>
-              {r.kind === 'table' &&
-                [-1, 1].flatMap((x) =>
-                  [-1, 1].map((y) => (
-                    <mesh
-                      key={`${x}-${y}`}
-                      position={[x * r.width * 0.35, 0.4, y * r.depth * 0.35]}
-                      castShadow
-                    >
-                      <boxGeometry args={[0.09, 0.8, 0.09]} />
-                      <meshStandardMaterial color="#5a6c50" />
-                    </mesh>
-                  )),
-                )}
-              {r.kind === 'seat' && (
-                <mesh position={[0, 0.8, r.depth * 0.35]} castShadow>
-                  <boxGeometry args={[r.width, 0.65, 0.18]} />
-                  <meshStandardMaterial color={color} />
+              {Array.from({ length: Math.ceil(floor.width / 2) }, (_, i) => (
+                <mesh
+                  key={i}
+                  rotation={[-Math.PI / 2, 0, 0]}
+                  position={[-floor.width / 2 + i * 2 + 1, 0.001, 0]}
+                  receiveShadow
+                >
+                  <planeGeometry args={[1.96, floor.depth]} />
+                  <meshStandardMaterial
+                    color={
+                      dark
+                        ? i % 2
+                          ? '#383647'
+                          : '#353342'
+                        : kind === 'parking'
+                          ? i % 2
+                            ? '#7e8989'
+                            : '#7b8686'
+                          : i % 2
+                            ? '#ded1b9'
+                            : '#d8c9af'
+                    }
+                    roughness={0.9}
+                  />
                 </mesh>
+              ))}
+              <mesh position={[0, 0.6, -floor.depth / 2]} castShadow receiveShadow>
+                <boxGeometry args={[floor.width, 1.2, 0.18]} />
+                <meshStandardMaterial color={dark ? '#444558' : '#d7d8c9'} />
+              </mesh>
+              <mesh position={[-floor.width / 2, 0.6, 0]} castShadow receiveShadow>
+                <boxGeometry args={[0.18, 1.2, floor.depth]} />
+                <meshStandardMaterial color={dark ? '#444558' : '#d7d8c9'} />
+              </mesh>
+              {kind === 'parking' &&
+                Array.from({ length: Math.floor(floor.width / 2) }, (_, i) => (
+                  <mesh
+                    key={i}
+                    position={[-floor.width / 2 + i * 2 + 1, 0.02, 0]}
+                    rotation={[-Math.PI / 2, 0, 0]}
+                  >
+                    <planeGeometry args={[0.8, 0.1]} />
+                    <meshStandardMaterial color="#e3d9ad" />
+                  </mesh>
+                ))}
+              {kind === 'cinema' && !(floor.objects ?? []).some((o) => o.kind === 'screen') && (
+                <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
+                  <Scenery
+                    object={{
+                      id: 'screen',
+                      kind: 'screen',
+                      label: 'Screen',
+                      x: floor.width / 2,
+                      y: 1,
+                      width: floor.width * 0.65,
+                      depth: 0.4,
+                      height: 3,
+                      color: '#c5deec',
+                      rotation: 0,
+                    }}
+                  />
+                </group>
               )}
-              {r.kind === 'space' && (
-                <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                  <ringGeometry args={[0.4, 0.46, 32]} />
-                  <meshBasicMaterial color="#fafbf5" />
-                </mesh>
-              )}
+              <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
+                {(floor.objects ?? []).map((o) => (
+                  <Scenery key={o.id} object={o} />
+                ))}
+              </group>
+              {floor.resources.map((r) => (
+                <ResourceModel
+                  key={r.id}
+                  resource={r}
+                  floor={floor}
+                  selected={selected === r.id}
+                  reserved={busy.includes(r.id)}
+                  onSelect={onSelect}
+                />
+              ))}
             </group>
-          );
-        })}
+          </Bounds>
+        </Suspense>
         <OrbitControls
           makeDefault
-          target={[0, 0, 0]}
-          minDistance={4}
+          minDistance={3}
           maxDistance={size * 3}
-          maxPolarAngle={Math.PI / 2.1}
+          maxPolarAngle={Math.PI / 2.15}
+          enableDamping
         />
       </Canvas>
-      <span className="map-scale">Drag to orbit · Scroll to zoom · Click to select</span>
+      <button
+        className="camera-reset"
+        aria-label="Reset 3D camera"
+        onClick={() => setCameraRevision((v) => v + 1)}
+      >
+        ↺ Reset view
+      </button>
+      <span className="map-scale">Drag to orbit · Scroll to zoom · Select a place to reserve</span>
     </div>
   );
 }

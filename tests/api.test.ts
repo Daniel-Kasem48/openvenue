@@ -190,6 +190,19 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     );
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
   });
+  it('keeps scenery non-bookable', async () => {
+    const objectId = venue.layout.floors[0].objects[0].id;
+    expect(
+      (
+        await request('/bookings', {
+          venueId: venue.id,
+          resourceId: objectId,
+          guestName: 'Guest',
+          ...interval,
+        })
+      ).status,
+    ).toBe(404);
+  });
   it('persists data in PostgreSQL', async () => {
     const result = await pool.query('SELECT name FROM venues WHERE id=$1', [venue.id]);
     expect(result.rows[0].name).toBe(venue.name);

@@ -6,7 +6,9 @@ export default defineConfig({
   server: {
     port: 5188,
     strictPort: true,
-    proxy: { '/api': { target: 'http://127.0.0.1:3188', changeOrigin: false } },
+    proxy: {
+      '/api': { target: `http://127.0.0.1:${process.env.PORT ?? 3188}`, changeOrigin: false },
+    },
   },
   build: { outDir: '../../dist/web', emptyOutDir: true },
 });
