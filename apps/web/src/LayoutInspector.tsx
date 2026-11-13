@@ -1,0 +1,156 @@
+import type { Venue, Floor, Resource, Layout } from '@openvenue/contracts';
+type Props = {
+  draft: Venue;
+  floor: Floor;
+  floorIndex: number;
+  resource?: Resource;
+  selected: string;
+  updateLayout: (layout: Layout) => void;
+  setFloorIndex: (value: number) => void;
+  setSelected: (id: string) => void;
+  updateResource: (patch: Partial<Resource>) => void;
+  addResource: () => void;
+  exportLayout: () => void;
+  importLayout: (file?: File) => Promise<void>;
+};
+export function LayoutInspector({
+  draft,
+  floor,
+  floorIndex,
+  resource,
+  selected,
+  updateLayout,
+  setFloorIndex,
+  setSelected,
+  updateResource,
+  addResource,
+  exportLayout,
+  importLayout,
+}: Props) {
+  return (
+    <>
+      <div className="eyebrow">LAYOUT STUDIO</div>
+      <h3>Make it your own.</h3>
+      <p className="muted">Select an item to edit. Drag it on the 2D map to move.</p>
+      <div className="editor-tools">
+        <button className="secondary" onClick={addResource}>
+          + Add resource
+        </button>
+        <button
+          className="text-button"
+          onClick={() => {
+            if (!draft || draft.layout.floors.length >= 10) return;
+            updateLayout({
+              ...draft.layout,
+              floors: [
+                ...draft.layout.floors,
+                {
+                  id: crypto.randomUUID(),
+                  name: `Floor ${draft.layout.floors.length + 1}`,
+                  width: floor.width,
+                  depth: floor.depth,
+                  resources: [],
+                },
+              ],
+            });
+            setFloorIndex(draft.layout.floors.length);
+            setSelected('');
+          }}
+        >
+          + Add floor
+        </button>
+      </div>
+      <label>
+        Floor name
+        <input
+          value={floor.name}
+          onChange={(e) =>
+            updateLayout({
+              ...draft!.layout,
+              floors: draft!.layout.floors.map((f, i) =>
+                i === floorIndex ? { ...f, name: e.target.value } : f,
+              ),
+            })
+          }
+        />
+      </label>
+      {resource && (
+        <div className="resource-editor">
+          <label>
+            Resource label
+            <input
+              value={resource.label}
+              onChange={(e) => updateResource({ label: e.target.value })}
+            />
+          </label>
+          <div className="field-grid">
+            {(['x', 'y', 'width', 'depth', 'rotation', 'capacity'] as const).map((key) => (
+              <label key={key}>
+                {key}
+                <input
+                  type="number"
+                  step={key === 'capacity' ? 1 : 0.25}
+                  value={resource[key]}
+                  onChange={(e) => updateResource({ [key]: Number(e.target.value) })}
+                />
+              </label>
+            ))}
+          </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={resource.accessible}
+              onChange={(e) => updateResource({ accessible: e.target.checked })}
+            />
+            Accessible
+          </label>
+          {resource.kind === 'space' && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={resource.ev}
+                onChange={(e) => updateResource({ ev: e.target.checked })}
+              />
+              EV charging
+            </label>
+          )}
+          <button
+            className="text-button danger"
+            onClick={() => {
+              updateLayout({
+                ...draft!.layout,
+                floors: draft!.layout.floors.map((f, i) =>
+                  i === floorIndex
+                    ? {
+                        ...f,
+                        resources: f.resources.filter((r) => r.id !== selected),
+                      }
+                    : f,
+                ),
+              });
+              setSelected('');
+            }}
+          >
+            Remove resource
+          </button>
+        </div>
+      )}
+      <div className="import-export">
+        <button className="text-button" onClick={exportLayout}>
+          ↓ Export JSON
+        </button>
+        <label className="file-button">
+          ↑ Import JSON
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={(e) => {
+              void importLayout(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      </div>
+    </>
+  );
+}
