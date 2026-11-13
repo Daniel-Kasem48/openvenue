@@ -18,6 +18,12 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Administrator sign-in, reservation list and cancellation. Guest names are private.
 - Responsive interface, keyboard-selectable 2D resources, 3D resource dropdown.
 
+## Booking and management
+
+Guests start in the venue directory, choose dates or a cinema screening, select a place in the default 3D view, review their choice, and receive a confirmation reference. Availability is checked again by the server when confirming; a conflict keeps the guest’s name so they can choose another place. Save the confirmation details before leaving the page; guest self-service cancellation and email receipts are not included.
+
+Administrators sign in to access venue setup, layout editing, showtimes, and the reservations list directly. Existing venues and bookings are preserved when updating the app.
+
 ## Quick start with Docker
 
 Requires Docker Compose. From this repository:

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 test('operator creates a template, edits a map and manages a reservation', async ({ page }) => {
   const venueName = `Browser restaurant ${Date.now()}`;
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Your spaces, connected.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where would you like to go?' })).toBeVisible();
   await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
   await page.getByLabel('Password').fill('integration-password-123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -27,7 +27,10 @@ test('operator creates a template, edits a map and manages a reservation', async
   ).toBe(1.8);
   expect(persisted.layout.floors[0].resources[0].shape).toBe('rectangle');
   await page.reload();
-  await page.getByRole('button', { name: new RegExp(venueName) }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(venueName) })
+    .click();
   await page.getByRole('button', { name: '3D view' }).click();
   await expect(page.locator('canvas')).toBeVisible();
   await page.getByRole('button', { name: '2D view' }).click();
@@ -50,19 +53,30 @@ test('parking and cinema templates have independent layouts and show controls', 
   page,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Central Parking/ }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: /Central Parking/ })
+    .click();
+  await page.getByRole('button', { name: 'Choose a place' }).click();
   await page.getByRole('button', { name: '2D view' }).click();
   await expect(page.getByLabel('Floor', { exact: true })).toHaveValue('0');
   await page.getByLabel('Floor', { exact: true }).selectOption('1');
   await expect(page.getByRole('button', { name: 'Select P2-01', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /Studio Cinema/ }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: /Studio Cinema/ })
+    .click();
   await expect(page.getByLabel('Showtime')).toBeVisible();
 });
 
 test('workspace works on desktop and mobile without horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page.getByRole('button', { name: /The Greenhouse/ }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: /The Greenhouse/ })
+    .click();
+  await page.getByRole('button', { name: 'Choose a place' }).click();
   await page.getByRole('button', { name: '2D view' }).click();
   await expect(page.getByRole('button', { name: 'Select Table 1', exact: true })).toBeVisible();
   await page.screenshot({ path: '/tmp/openvenue-desktop.png', fullPage: true });
@@ -127,12 +141,18 @@ test('3D scene is the default and all venue types expose selectable models', asy
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByRole('button', { name: '3D view' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   for (const [venue, resource, kind] of venues) {
-    await page.getByRole('button', { name: new RegExp(venue) }).click();
+    await page
+      .locator('.venue-list')
+      .getByRole('button', { name: new RegExp(venue) })
+      .click();
+    await expect(page.getByRole('button', { name: '3D view' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await expect(page.locator('canvas')).toBeVisible();
     await page
       .getByRole('combobox', { name: 'Resource', exact: true })
@@ -143,4 +163,61 @@ test('3D scene is the default and all venue types expose selectable models', asy
     await page.screenshot({ path: `/tmp/openvenue-3d-${kind}.png`, fullPage: true });
   }
   expect(errors).toEqual([]);
+});
+
+test('guest follows venue, time, place, review and confirmation with conflict recovery', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Guest journey ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { kind: 'restaurant', name } })
+  ).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await page.getByLabel('Leaving').fill('2020-01-01T12:00');
+  await expect(page.getByRole('button', { name: 'Choose a place' })).toBeDisabled();
+  const start = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+  const end = new Date(Date.now() + 90000000).toISOString().slice(0, 16);
+  await page.getByLabel('Arriving').fill(start);
+  await page.getByLabel('Leaving').fill(end);
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  await expect(page.getByRole('button', { name: '3D view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: 'Review reservation' })).toBeDisabled();
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption({ label: 'Table 1' });
+  await page.getByRole('button', { name: 'Review reservation' }).click();
+  await page.getByLabel('Guest name').fill('Journey Guest');
+  // Another visitor reserves the selection after the availability check.
+  await request.post('/api/bookings', {
+    data: {
+      venueId: venue.id,
+      resourceId: venue.layout.floors[0].resources[0].id,
+      guestName: 'Other Guest',
+      start: new Date(start).toISOString(),
+      end: new Date(end).toISOString(),
+    },
+  });
+  await page.getByRole('button', { name: 'Confirm reservation' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByLabel('Guest name')).toHaveValue('Journey Guest');
+  await page.getByRole('button', { name: 'Change place' }).click();
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption({ label: 'Table 2' });
+  await page.getByRole('button', { name: 'Review reservation' }).click();
+  await page.getByRole('button', { name: 'Confirm reservation' }).click();
+  const receipt = page.getByRole('region', { name: 'Booking confirmation' });
+  await expect(receipt).toContainText('Journey Guest');
+  await expect(receipt).toContainText('Table 2');
+  await expect(receipt).toContainText(name);
+  await expect(receipt.locator('.booking-reference')).not.toBeEmpty();
+  await page.getByRole('button', { name: 'Book another visit' }).click();
+  await expect(page.getByRole('region', { name: 'Venue directory' })).toBeVisible();
 });

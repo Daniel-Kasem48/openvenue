@@ -22,6 +22,9 @@ const types: Record<VenueKind, { icon: string; name: string; description: string
   cinema: { icon: '▥', name: 'Cinema', description: 'Every seat has a story' },
 };
 export default function App() {
+  const [step, setStep] = useState<'venues' | 'time' | 'place' | 'review' | 'done'>('venues');
+  const [confirmation, setConfirmation] = useState<Booking | null>(null);
+  const [filter, setFilter] = useState<VenueKind | 'all'>('all');
   const [venues, setVenues] = useState<Venue[]>([]),
     [venueId, setVenueId] = useState(''),
     [draft, setDraft] = useState<Venue | null>(null);
@@ -150,6 +153,8 @@ export default function App() {
   }, [dirty]);
   const chooseVenue = (id: string) => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
+    setStep(admin ? 'place' : 'time');
+    setConfirmation(null);
     setVenueId(id);
     setView('3d');
     setFloorIndex(0);
@@ -228,7 +233,7 @@ export default function App() {
   const reserve = () =>
     run(async () => {
       if (!venue || !resource || !interval) return;
-      await api(
+      const booking = await api<Booking>(
         '/bookings',
         json({
           venueId: venue.id,
@@ -236,7 +241,12 @@ export default function App() {
           guestName: guest,
           ...(venue.kind === 'cinema' ? { showId } : interval),
         }),
-      );
+      ).catch((error) => {
+        setRefresh((v) => v + 1);
+        throw error;
+      });
+      setConfirmation(booking);
+      setStep('done');
       setRefresh((v) => v + 1);
       setGuest('');
       setMessage(`Reservation confirmed for ${resource.label}.`);
@@ -293,6 +303,80 @@ export default function App() {
     });
     setSelected(r.id);
   };
+  const timeFields = (
+    <>
+      {' '}
+      {venue?.kind === 'cinema' ? (
+        <>
+          <label>
+            Showtime
+            <select
+              aria-label="Showtime"
+              value={showId}
+              onChange={(e) => setShowId(e.target.value)}
+            >
+              <option value="">Choose a show</option>
+              {shows.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title} · {new Date(s.start).toLocaleString()}
+                </option>
+              ))}
+            </select>
+          </label>
+          {shows.length === 0 && (
+            <p className="muted">No upcoming shows. An administrator can add one.</p>
+          )}
+          {admin && (
+            <button
+              className="text-button"
+              onClick={() => {
+                setShowTitle('');
+                setModal('show');
+              }}
+            >
+              + Add showtime
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <label>
+            Arriving
+            <input
+              aria-label="Arriving"
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </label>
+          <label>
+            Leaving
+            <input
+              aria-label="Leaving"
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </label>
+          {!interval && (
+            <p className="field-error">Choose an end after the start, within seven days.</p>
+          )}
+        </>
+      )}
+    </>
+  );
+  const validTime =
+    !!interval && Date.parse(interval.start) > Date.now() && (venue?.kind !== 'cinema' || !!showId);
+  const canReserve = validTime && availabilityReady && !!resource && !busy.includes(selected);
+  const directory = () => {
+    if (dirty && !confirm('Discard unsaved layout changes?')) return;
+    setEditing(false);
+    setDirty(false);
+    setTab('map');
+    setStep('venues');
+    setConfirmation(null);
+    setMessage('');
+  };
   return (
     <div className="shell" inert={working} aria-busy={working}>
       <aside className="sidebar">
@@ -300,11 +384,8 @@ export default function App() {
           <span className="brand-symbol">◈</span> openvenue<span className="beta">BETA</span>
         </a>
         <div className="workspace-label">YOUR WORKSPACE</div>
-        <button
-          className={`nav-item ${tab === 'map' ? 'active' : ''}`}
-          onClick={() => setTab('map')}
-        >
-          <span>▦</span> Venue explorer <span className="nav-count">{venues.length}</span>
+        <button className={`nav-item ${tab === 'map' ? 'active' : ''}`} onClick={directory}>
+          <span>▦</span> Browse venues <span className="nav-count">{venues.length}</span>
         </button>
         {admin && (
           <button
@@ -356,6 +437,7 @@ export default function App() {
                     setEditing(false);
                     setDirty(false);
                     setTab('map');
+                    setStep('venues');
                     setBookings([]);
                   })
                 : setModal('login')
@@ -363,7 +445,7 @@ export default function App() {
           >
             <span className="avatar">{admin ? 'AD' : 'G'}</span>
             <span>
-              {admin ? 'Administrator' : 'Guest workspace'}
+              {admin ? 'Administrator' : 'Guest booking'}
               <small>{admin ? 'Sign out' : 'Admin sign in'}</small>
             </span>
             <span>↗</span>
@@ -373,7 +455,8 @@ export default function App() {
       <main className="main">
         <header className="topbar">
           <div>
-            Workspace <span>/</span> {tab === 'map' ? 'Venue explorer' : 'Reservations'}
+            Workspace <span>/</span>{' '}
+            {tab === 'bookings' ? 'Reservations' : admin ? 'Venue management' : 'Book a place'}
           </div>
           <div className="topbar-right">
             <span className="live-dot" /> Self-hosted workspace{' '}
@@ -383,9 +466,23 @@ export default function App() {
         <div className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">A LITTLE SPACE. ENDLESS POSSIBILITIES.</div>
-              <h1>Your spaces, connected.</h1>
-              <p>Plan the layout. Find the right spot. Make room for everyone.</p>
+              <div className="eyebrow">
+                {admin ? 'OPERATOR WORKSPACE' : 'RESERVE YOUR NEXT VISIT'}
+              </div>
+              <h1>
+                {admin
+                  ? 'Manage your venues'
+                  : step === 'venues'
+                    ? 'Where would you like to go?'
+                    : step === 'done'
+                      ? 'You’re booked.'
+                      : 'Plan your visit'}
+              </h1>
+              <p>
+                {admin
+                  ? 'Set up spaces, edit layouts and manage guest reservations.'
+                  : 'Choose a venue, find your place and reserve in a few steps.'}
+              </p>
             </div>
             {admin ? (
               <button className="primary" onClick={() => openCreate()}>
@@ -408,25 +505,15 @@ export default function App() {
           <div className={message ? 'notice success' : 'sr-only'} role="status" aria-live="polite">
             {message}
           </div>
-          <section className="template-cards" aria-label="Venue types">
-            {(Object.entries(types) as [VenueKind, (typeof types)[VenueKind]][]).map(([key, t]) => (
-              <button
-                key={key}
-                className={`template-card ${venue?.kind === key ? 'selected-template' : ''}`}
-                onClick={() => {
-                  const match = venues.find((v) => v.kind === key);
-                  if (match) chooseVenue(match.id);
-                }}
-              >
-                <span className={`template-icon ${key}`}>{t.icon}</span>
-                <span>
-                  <strong>{t.name}</strong>
-                  <small>{t.description}</small>
+          {tab === 'map' && !admin && step !== 'done' && (
+            <nav className="booking-steps" aria-label="Booking progress">
+              {(['venues', 'time', 'place', 'review'] as const).map((item, i) => (
+                <span key={item} aria-current={step === item ? 'step' : undefined}>
+                  {i + 1}. {['Venue', 'Time', 'Place', 'Review'][i]}
                 </span>
-                <span className="card-arrow">↗</span>
-              </button>
-            ))}
-          </section>
+              ))}
+            </nav>
+          )}
           {tab === 'bookings' ? (
             <section className="panel booking-list">
               <div className="panel-title">
@@ -450,7 +537,10 @@ export default function App() {
                     <tbody>
                       {bookings.map((b) => (
                         <tr key={b.id}>
-                          <td>{b.guestName}</td>
+                          <td>
+                            {b.guestName}
+                            <small className="booking-reference">{b.id}</small>
+                          </td>
                           <td>
                             {b.venueName}
                             <small>{b.resourceLabel}</small>
@@ -483,6 +573,112 @@ export default function App() {
                 </div>
               )}
             </section>
+          ) : step === 'venues' ? (
+            <section aria-label="Venue directory">
+              <div className="directory-filters" aria-label="Filter venues">
+                {(['all', 'restaurant', 'parking', 'cinema'] as const).map((type) => (
+                  <button
+                    key={type}
+                    className={filter === type ? 'primary' : 'secondary'}
+                    aria-pressed={filter === type}
+                    onClick={() => setFilter(type)}
+                  >
+                    {type === 'all' ? 'All venues' : types[type].name}
+                  </button>
+                ))}
+              </div>
+              <div className="venue-directory">
+                {venues
+                  .filter((v) => filter === 'all' || v.kind === filter)
+                  .map((v) => (
+                    <article className="panel directory-card" key={v.id}>
+                      <div className={`venue-art ${v.kind}`} aria-hidden="true">
+                        {types[v.kind].icon}
+                      </div>
+                      <div className="directory-details">
+                        <div className="eyebrow">{types[v.kind].name}</div>
+                        <h2>{v.name}</h2>
+                        <p>
+                          {v.layout.floors.reduce((n, f) => n + f.resources.length, 0)}{' '}
+                          {v.kind === 'restaurant'
+                            ? 'tables'
+                            : v.kind === 'parking'
+                              ? 'parking spaces'
+                              : 'seats'}{' '}
+                          · {v.layout.floors.length}{' '}
+                          {v.layout.floors.length === 1 ? 'floor' : 'floors'}
+                        </p>
+                        <button className="primary full" onClick={() => chooseVenue(v.id)}>
+                          {admin ? 'Manage' : 'Book'} {v.name} →
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+              {loaded && !venues.some((v) => filter === 'all' || v.kind === filter) && (
+                <p className="empty">No venues in this category yet.</p>
+              )}
+              {!loaded && <p className="empty">Loading venues…</p>}
+            </section>
+          ) : step === 'done' && confirmation ? (
+            <section className="panel journey-panel" aria-label="Booking confirmation">
+              <div className="confirmation-mark" aria-hidden="true">
+                ✓
+              </div>
+              <h2>Reservation confirmed</h2>
+              <p>Save these details for your arrival.</p>
+              <dl className="booking-summary">
+                <dt>Venue</dt>
+                <dd>{venue?.name}</dd>
+                <dt>Place</dt>
+                <dd>
+                  {resource?.label} · {floor?.name}
+                </dd>
+                <dt>Guest</dt>
+                <dd>{confirmation.guestName}</dd>
+                <dt>From</dt>
+                <dd>{new Date(confirmation.start).toLocaleString()}</dd>
+                <dt>Until</dt>
+                <dd>{new Date(confirmation.end).toLocaleString()}</dd>
+                <dt>Reference</dt>
+                <dd className="booking-reference">{confirmation.id}</dd>
+              </dl>
+              <p className="muted">
+                To change or cancel your reservation, contact the venue and quote this reference.
+              </p>
+              <button className="primary" onClick={directory}>
+                Book another visit
+              </button>
+            </section>
+          ) : !admin && step === 'time' && venue ? (
+            <section className="panel journey-panel">
+              <button className="text-button" onClick={directory}>
+                ← All venues
+              </button>
+              <div className="eyebrow">{types[venue.kind].name}</div>
+              <h2>{venue.name}</h2>
+              <p>
+                {venue.kind === 'cinema'
+                  ? 'Choose your screening before selecting a seat.'
+                  : 'When will you visit? Availability is checked for the whole stay.'}
+              </p>
+              {timeFields}
+              {interval && !validTime && venue.kind !== 'cinema' && (
+                <p className="field-error">Choose an arrival time in the future.</p>
+              )}
+              <p className="muted">Times are shown in your device’s local time zone.</p>
+              {validTime && !availabilityReady && <p role="status">Checking availability…</p>}
+              <button
+                className="primary full"
+                disabled={!validTime || !availabilityReady}
+                onClick={() => {
+                  setSelected('');
+                  setStep('place');
+                }}
+              >
+                Choose a place →
+              </button>
+            </section>
           ) : !current || !floor ? (
             <div className="empty">
               {loaded
@@ -490,7 +686,9 @@ export default function App() {
                 : 'Opening your workspace…'}
             </div>
           ) : (
-            <section className="panel venue-panel">
+            <section
+              className={`panel venue-panel ${!admin && step === 'review' ? 'review-panel' : ''}`}
+            >
               <div className="panel-title">
                 <div className="venue-heading">
                   <span className="venue-icon">{types[current.kind].icon}</span>
@@ -542,6 +740,18 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {!admin && (
+                <div className="visit-summary">
+                  <button className="text-button" onClick={() => setStep('time')}>
+                    ← Change time
+                  </button>
+                  <span>
+                    {activeShow?.title}
+                    {interval &&
+                      ` · ${new Date(interval.start).toLocaleString()} – ${new Date(interval.end).toLocaleString()}`}
+                  </span>
+                </div>
+              )}
               <div className="map-toolbar">
                 <label className="floor-control">
                   Floor
@@ -656,69 +866,24 @@ export default function App() {
                     />
                   ) : (
                     <>
-                      <div className="eyebrow">FIND YOUR PLACE</div>
-                      <h3>A spot just for you.</h3>
-                      <p className="muted">Pick your time, then choose a spot on the map.</p>
-                      {current.kind === 'cinema' ? (
-                        <>
-                          <label>
-                            Showtime
-                            <select
-                              aria-label="Showtime"
-                              value={showId}
-                              onChange={(e) => setShowId(e.target.value)}
-                            >
-                              <option value="">Choose a show</option>
-                              {shows.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.title} · {new Date(s.start).toLocaleString()}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          {shows.length === 0 && (
-                            <p className="muted">
-                              No upcoming shows. An administrator can add one.
-                            </p>
-                          )}
-                          {admin && (
-                            <button
-                              className="text-button"
-                              onClick={() => {
-                                setShowTitle('');
-                                setModal('show');
-                              }}
-                            >
-                              + Add showtime
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <label>
-                            Arriving
-                            <input
-                              aria-label="Arriving"
-                              type="datetime-local"
-                              value={start}
-                              onChange={(e) => setStart(e.target.value)}
-                            />
-                          </label>
-                          <label>
-                            Leaving
-                            <input
-                              aria-label="Leaving"
-                              type="datetime-local"
-                              value={end}
-                              onChange={(e) => setEnd(e.target.value)}
-                            />
-                          </label>
-                          {!interval && (
-                            <p className="field-error">
-                              Choose an end after the start, within seven days.
-                            </p>
-                          )}
-                        </>
+                      <div className="eyebrow">
+                        {step === 'review' ? 'FINAL STEP' : 'SELECT YOUR PLACE'}
+                      </div>
+                      <h3>
+                        {step === 'review' ? 'Review your reservation' : 'Choose an available spot'}
+                      </h3>
+                      <p className="muted">
+                        {step === 'review'
+                          ? 'Check your selection and enter the name for your reservation.'
+                          : 'Explore the map or choose from the list below.'}
+                      </p>
+                      {admin && timeFields}
+                      {!admin && step === 'review' && (
+                        <p>
+                          <strong>{floor.name}</strong>
+                          <br />
+                          {activeShow?.title}
+                        </p>
                       )}
                       <div className={`selection-card ${resource ? 'has-selection' : ''}`}>
                         <span className="selection-symbol">
@@ -734,7 +899,7 @@ export default function App() {
                           <span className="reserved-label">Reserved for this time</span>
                         )}
                       </div>
-                      {view === '3d' && (
+                      {(admin || step !== 'review') && (view === '3d' || !admin) && (
                         <label>
                           Resource
                           <select value={selected} onChange={(e) => setSelected(e.target.value)}>
@@ -748,37 +913,44 @@ export default function App() {
                           </select>
                         </label>
                       )}
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void reserve();
-                        }}
-                      >
-                        <label>
-                          Guest name
-                          <input
-                            autoComplete="name"
-                            value={guest}
-                            maxLength={100}
-                            required
-                            onChange={(e) => setGuest(e.target.value)}
-                            placeholder="Who are we expecting?"
-                          />
-                        </label>
+                      {!admin && step === 'place' ? (
                         <button
                           className="primary full"
-                          disabled={
-                            working ||
-                            !resource ||
-                            !availabilityReady ||
-                            busy.includes(selected) ||
-                            !interval ||
-                            (current.kind === 'cinema' && !showId)
-                          }
+                          disabled={!canReserve}
+                          onClick={() => setStep('review')}
                         >
-                          Confirm reservation <span>↗</span>
+                          Review reservation →
                         </button>
-                      </form>
+                      ) : (
+                        <>
+                          {!admin && (
+                            <button className="text-button" onClick={() => setStep('place')}>
+                              ← Change place
+                            </button>
+                          )}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              void reserve();
+                            }}
+                          >
+                            <label>
+                              Guest name
+                              <input
+                                autoComplete="name"
+                                value={guest}
+                                maxLength={100}
+                                required
+                                onChange={(e) => setGuest(e.target.value)}
+                                placeholder="Who are we expecting?"
+                              />
+                            </label>
+                            <button className="primary full" disabled={working || !canReserve}>
+                              Confirm reservation <span>↗</span>
+                            </button>
+                          </form>
+                        </>
+                      )}
                       <p className="privacy-note">
                         No payment required. Your details are visible only to the venue
                         administrator.
