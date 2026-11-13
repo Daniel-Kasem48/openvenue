@@ -48,6 +48,19 @@ export default function App() {
   const [kind, setKind] = useState<VenueKind>('restaurant'),
     [newName, setNewName] = useState(''),
     [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const openLogin = () => {
+    setError('');
+    setPassword('');
+    setShowPassword(false);
+    setModal('login');
+  };
+  const closeLogin = () => {
+    setPassword('');
+    setShowPassword(false);
+    setError('');
+    setModal(null);
+  };
   const [start, setStart] = useState(() => localTime(new Date(Date.now() + 3600000))),
     [end, setEnd] = useState(() => localTime(new Date(Date.now() + 7200000)));
   const [shows, setShows] = useState<Show[]>([]),
@@ -523,7 +536,7 @@ export default function App() {
                     setStep('venues');
                     setBookings([]);
                   })
-                : setModal('login')
+                : openLogin()
             }
           >
             <span className="avatar">{admin ? 'AD' : 'G'}</span>
@@ -572,12 +585,12 @@ export default function App() {
                 + New venue
               </button>
             ) : (
-              <button className="secondary" onClick={() => setModal('login')}>
+              <button className="secondary" onClick={openLogin}>
                 Admin sign in
               </button>
             )}
           </div>
-          {error && (
+          {error && modal !== 'login' && (
             <div className="notice error" role="alert">
               {error}
               <button aria-label="Dismiss error" onClick={() => setError('')}>
@@ -1162,7 +1175,7 @@ export default function App() {
         </div>
       </main>
       {modal === 'login' && (
-        <Modal title="Welcome back" onClose={() => setModal(null)}>
+        <Modal title="Admin sign in" onClose={closeLogin}>
           <p className="muted">Sign in to manage venues, layouts and reservations.</p>
           <form
             onSubmit={(e) => {
@@ -1170,8 +1183,9 @@ export default function App() {
               void run(async () => {
                 await api('/auth/login', json({ password }));
                 setAdmin(true);
-                setPassword('');
-                setModal(null);
+                closeLogin();
+                setTab('map');
+                setStep('place');
                 setMessage('Signed in as administrator.');
               });
             }}
@@ -1179,16 +1193,34 @@ export default function App() {
             <label>
               Password
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
+                data-autofocus
+                aria-describedby="admin-password-help"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </label>
-            {error && <p className="field-error">{error}</p>}
+            <button
+              type="button"
+              className="text-button"
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? 'Hide password' : 'Show password'}
+            </button>
+            <p id="admin-password-help" className="muted">
+              Use the admin password supplied by your workspace owner. No account registration is
+              needed.
+            </p>
+            {error && (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            )}
             <button className="primary full" disabled={working}>
-              Sign in
+              {working ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
         </Modal>

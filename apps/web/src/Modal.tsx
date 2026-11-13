@@ -11,6 +11,7 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
+    ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }, []);
   return (
     <dialog ref={ref} onCancel={onClose}>

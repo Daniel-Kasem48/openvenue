@@ -566,3 +566,31 @@ test('stadium block numbers persist and keyboard focus stays close to the seat',
     saved.layout.floors[0].objects.some((o: any) => o.kind === 'label' && o.label === '160'),
   ).toBe(true);
 });
+
+test('admin sign-in supports retry, hides dismissed credentials and opens management', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const openLogin = page.getByRole('button', { name: 'Admin sign in', exact: true });
+  await openLogin.click();
+  const password = page.getByLabel('Password', { exact: true });
+  await expect(password).toBeFocused();
+  await password.fill('incorrect-password');
+  await page.getByRole('button', { name: 'Show password', exact: true }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Invalid password');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await openLogin.click();
+  await expect(password).toHaveValue('');
+  await expect(password).toHaveAttribute('type', 'password');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await password.fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Manage your venues' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit layout', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Manage your venues' })).toBeVisible();
+});
