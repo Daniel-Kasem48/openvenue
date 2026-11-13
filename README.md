@@ -10,9 +10,9 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Restaurant: a furnished bistro with 12 round/rectangular tables, chairs, place settings, cocktail bar, reception and lounge.
 - Parking: 32 spaces across two floors, EV chargers, accessible bays, security booth, entry barrier, ramps, stairs and staff vehicles.
 - Cinema: 48 upholstered seats with armrests, screen, acoustic partitions, foyer, concessions and administrator-created showtimes.
-- Stadium: 96 priced seats in four stands, tiered rows, an editable football pitch, entrances, scoreboard and concessions.
+- Stadium: 984 priced seats in four rising stands (12 rows north/east/west, 16 south), an editable football pitch, entrances, scoreboard and concessions.
 - SVG map editor: drag, numeric position/size/rotation, labels, floors, resources.
-- 3D opens by default: rounded furniture, detailed vehicles, shaded materials, orbit/zoom, camera fitting, selection and availability. Editing switches to 2D.
+- 3D opens by default: rounded furniture, detailed vehicles, shaded materials, orbit/zoom, camera fitting, selection and availability. Editing switches to 2D. Camera buttons offer overview, top and four side views; drag to orbit, right-drag to pan, and pinch/scroll to zoom.
 - Thirteen editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers, barriers and pitches. Position, size, height, rotation and color persist in the shared layout.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.
@@ -29,7 +29,7 @@ Administrators sign in to access venue setup, layout editing, showtimes, and the
 
 Templates create independent starting JSON data with new IDs. Each venue’s complete scene is saved in PostgreSQL `venues.layout` (JSONB); TSX only renders object types. Start from a template or choose **Empty scene**. Add/remove objects and seats, resize the floor, move/rotate/resize objects, and save. Refreshing reads the saved scene, never reapplies the template. Import/export supports the same validated JSON format.
 
-The stadium seed has 96 seats across four stands, three row heights, an editable pitch, entrances, scoreboard and concessions. The pitch is an ordinary scene object; deleting it removes it from both views.
+The stadium seed has 984 seats across four stands, with each successive row higher than the last, an editable pitch, entrances, scoreboard and concessions. The yellow South Stand is inspired by [BVB’s official stadium layout](https://www.bvb.de/de/en/signal-iduna-park/stadium-visit/stadium-plan.html); this is a compact seating template, not an exact replica or official seating chart. Seats use instanced rendering for the larger scene. The pitch is an ordinary scene object; deleting it removes it from both views.
 
 In **Edit layout → Reservation pricing**, choose free, one standard price, or different prices per seat/table/space. For individual prices, select a resource and edit its reservation price. Supported currencies: USD, EUR, GBP, AED, SAR and SYP. Prices are for the entire reservation, not per hour; a table price covers the whole party. Values are stored as integer minor units. The server computes the total, checks the guest’s quote, and snapshots each confirmed price/currency so later edits do not change historical reservations. No payment is collected.
 

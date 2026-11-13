@@ -66,3 +66,17 @@ it('faces each stadium stand toward the pitch', () => {
     expect(Math.sin(angle) * inward[0] - Math.cos(angle) * inward[1]).toBeGreaterThan(0);
   }
 });
+
+it('seeds a dense stadium with progressively higher editable rows', () => {
+  const floor = makeTemplate('stadium').floors[0];
+  expect(floor.resources).toHaveLength(984);
+  for (const section of ['North', 'South', 'East', 'West']) {
+    const firstSeats = floor.resources.filter(
+      (r) => r.label.startsWith(section + ' ') && / [A-Z]1$/.test(r.label),
+    );
+    expect(firstSeats.length).toBeGreaterThanOrEqual(12);
+    for (let i = 1; i < firstSeats.length; i++)
+      expect(firstSeats[i].elevation).toBeGreaterThan(firstSeats[i - 1].elevation);
+  }
+  expect(floor.objects.some((o) => o.label === 'South terrace 16')).toBe(true);
+});

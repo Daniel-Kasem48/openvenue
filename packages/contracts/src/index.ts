@@ -20,6 +20,10 @@ export const resourceSchema = z.object({
   rotation: z.number().min(0).max(360),
   shape: z.enum(['rectangle', 'round']).default('rectangle'),
   price: z.number().int().min(0).max(100000000).default(0),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#985864'),
   elevation: z.number().min(0).max(8).default(0),
   capacity: z.number().int().min(1).max(50),
   accessible: z.boolean(),

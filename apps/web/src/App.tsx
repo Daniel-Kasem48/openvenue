@@ -336,6 +336,7 @@ export default function App() {
       depth: type === 'space' ? 5 : type === 'table' ? 1.6 : 1,
       rotation: 0,
       shape: 'rectangle',
+      color: '#985864',
       price: 0,
       elevation: 0,
       capacity: type === 'table' ? 4 : 1,
@@ -1232,7 +1233,7 @@ export default function App() {
                   : kind === 'parking'
                     ? 'Garage · 2 levels, EV bays, ramp & security'
                     : kind === 'stadium'
-                      ? 'Stadium · 96 seats, 4 stands, tiered rows & pitch'
+                      ? 'Stadium · 984 seats, rising stands & editable pitch'
                       : 'Cinema · 48 seats, foyer & concessions'}
               </p>
             </div>

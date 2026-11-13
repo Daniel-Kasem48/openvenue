@@ -370,3 +370,45 @@ test('operator builds an empty scene and saved objects survive reload', async ({
   await expect(page.getByLabel('width', { exact: true })).toHaveValue('25');
   await expect(page.getByLabel('Object color')).toHaveValue('#123456');
 });
+
+test('camera presets and touch gestures change the 3D viewpoint', async ({ page, request }) => {
+  test.setTimeout(90000);
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  const name = `Camera ${Date.now()}`;
+  await request.post('/api/venues', { data: { name, kind: 'parking', empty: true } });
+  await page.goto('/');
+  await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
+  await page.getByRole('button', { name: 'Choose a place' }).click();
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveCSS('touch-action', 'none');
+  // Wait for the initial bounds animation to settle before comparing viewpoints.
+  await page.waitForTimeout(500);
+  const before = await canvas.screenshot();
+  await page.getByRole('button', { name: 'Top camera view', exact: true }).click();
+  await expect.poll(async () => !(await canvas.screenshot()).equals(before)).toBe(true);
+  await page.waitForTimeout(500);
+  const top = await canvas.screenshot();
+  await page.getByRole('button', { name: 'South camera view', exact: true }).click();
+  await expect.poll(async () => !(await canvas.screenshot()).equals(top)).toBe(true);
+  await page.waitForTimeout(500);
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  const client = await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+  const start = await canvas.screenshot();
+  const x = box.x + box.width / 2,
+    y = box.y + box.height / 2;
+  await client.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y, id: 1 }],
+  });
+  for (let i = 1; i <= 10; i++)
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: x + i * 12, y: y + i * 3, id: 1 }],
+    });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(async () => !(await canvas.screenshot()).equals(start)).toBe(true);
+  await page.getByRole('button', { name: 'Reset 3D camera' }).click();
+});

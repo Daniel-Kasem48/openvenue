@@ -17,6 +17,7 @@ const item = (
   depth,
   capacity,
   price: 0,
+  color: '#985864',
   elevation: 0,
   shape: 'rectangle',
   rotation: 0,
@@ -60,49 +61,82 @@ export function makeObject(
   };
 }
 export function makeTemplate(kind: VenueKind): Layout {
-  if (kind === 'stadium')
+  if (kind === 'stadium') {
+    const resources: Resource[] = [];
+    const objects: SceneObject[] = [
+      makeObject('pitch', 40, 38, { label: 'Football pitch' }),
+      makeObject('door', 40, 75, { label: 'South entrance', width: 5 }),
+      makeObject('door', 40, 1, { label: 'North entrance', width: 5 }),
+      makeObject('screen', 67, 3, { label: 'Scoreboard', width: 10, height: 5 }),
+      makeObject('counter', 5, 73, { label: 'Concessions', width: 6 }),
+      makeObject('counter', 75, 73, { label: 'Ticket office', width: 6 }),
+    ];
+    for (const [side, section] of ['North', 'South', 'East', 'West'].entries()) {
+      const rows = side === 1 ? 16 : 12,
+        columns = side < 2 ? 18 : 20;
+      for (let row = 0; row < rows; row++) {
+        const elevation = 0.3 + row * 0.45;
+        const x = side < 2 ? 40 : side === 2 ? 61 + row * 1.25 : 19 - row * 1.25;
+        const y = side === 0 ? 23 - row * 1.25 : side === 1 ? 53 + row * 1.25 : 38;
+        objects.push(
+          makeObject('partition', x, y, {
+            label: `${section} terrace ${row + 1}`,
+            width: side < 2 ? 32 : 1.25,
+            depth: side < 2 ? 1.25 : 25,
+            height: elevation - 0.06,
+            color: '#727876',
+          }),
+        );
+        for (let col = 0; col < columns; col++) {
+          const px = side < 2 ? 40 + (col - (columns - 1) / 2) * 1.7 : x;
+          const py = side < 2 ? y : 38 + (col - (columns - 1) / 2) * 1.2;
+          resources.push({
+            ...item(
+              'seat',
+              `${section} ${String.fromCharCode(65 + row)}${col + 1}`,
+              px,
+              py,
+              0.85,
+              0.9,
+            ),
+            rotation: [180, 0, 270, 90][side],
+            elevation,
+            color: side === 1 || row % 4 !== 2 ? '#e6c52c' : '#343c3c',
+            price: side < 2 ? 4500 - Math.min(row, 10) * 150 : 7000 - Math.min(row, 10) * 250,
+            accessible: row === 0 && col === 0,
+          });
+        }
+      }
+      objects.push(
+        makeObject(
+          'stairs',
+          side < 2 ? 58 : side === 2 ? 68 : 12,
+          side === 0 ? 16 : side === 1 ? 62 : 52,
+          {
+            label: `${section} aisle steps`,
+            width: side < 2 ? 2 : 16,
+            depth: side < 2 ? 18 : 2,
+            height: 5,
+            color: '#c9c9bb',
+          },
+        ),
+      );
+    }
     return {
       version: 1,
       pricing: { mode: 'per-resource', currency: 'USD', amount: 0 },
       floors: [
         {
           id: crypto.randomUUID(),
-          name: 'Arena · North, South, East & West stands',
-          width: 64,
-          depth: 52,
-          resources: ['North', 'South', 'East', 'West'].flatMap((section, side) =>
-            Array.from({ length: 24 }, (_, i) => {
-              const row = Math.floor(i / 8),
-                col = i % 8;
-              const x = side < 2 ? 19.75 + col * 3.5 : side === 2 ? 56 + row * 2 : 8 - row * 2;
-              const y = side === 0 ? 8 - row * 2 : side === 1 ? 44 + row * 2 : 15.5 + col * 3;
-              return {
-                ...item(
-                  'seat',
-                  `${section} ${String.fromCharCode(65 + row)}${col + 1}`,
-                  x,
-                  y,
-                  1,
-                  1.1,
-                ),
-                rotation: [180, 0, 270, 90][side],
-                elevation: row * 0.6,
-                price: side < 2 ? 2500 + (2 - row) * 1000 : 4000 + (2 - row) * 1500,
-                accessible: row === 0 && col === 0,
-              };
-            }),
-          ),
-          objects: [
-            makeObject('pitch', 32, 26, { label: 'Football pitch' }),
-            makeObject('door', 32, 51, { label: 'South entrance', width: 4 }),
-            makeObject('door', 32, 1, { label: 'North entrance', width: 4 }),
-            makeObject('screen', 51, 3, { label: 'Scoreboard', width: 8, height: 4 }),
-            makeObject('counter', 5, 48, { label: 'Concessions', width: 6 }),
-            makeObject('counter', 59, 48, { label: 'Ticket office', width: 6 }),
-          ],
+          name: 'Westfalen-inspired arena · four rising stands',
+          width: 80,
+          depth: 76,
+          resources,
+          objects,
         },
       ],
     };
+  }
   if (kind === 'restaurant')
     return {
       version: 1,

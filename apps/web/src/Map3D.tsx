@@ -3,12 +3,32 @@ import { Canvas } from '@react-three/fiber';
 import { Bounds, OrbitControls, useBounds, useCursor } from '@react-three/drei';
 import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
 import { CinemaChair, DiningTable, ParkingBay } from './scene/Models';
+import { StadiumSeats } from './scene/StadiumSeats';
 import { Scenery } from './scene/Scenery';
-function FitCamera({ revision }: { revision: number }) {
+type Viewpoint = 'overview' | 'top' | 'north' | 'south' | 'east' | 'west';
+function FitCamera({ revision, viewpoint }: { revision: number; viewpoint: Viewpoint }) {
   const bounds = useBounds();
   useEffect(() => {
-    bounds.refresh().reset().fit();
-  }, [bounds, revision]);
+    bounds.refresh().clip();
+    const { center, distance } = bounds.getSize();
+    const directions: Record<Viewpoint, [number, number, number]> = {
+      overview: [0.65, 0.75, 0.85],
+      top: [0, 1, 0.001],
+      north: [0, 0.35, -1],
+      south: [0, 0.35, 1],
+      east: [1, 0.35, 0],
+      west: [-1, 0.35, 0],
+    };
+    const direction = directions[viewpoint],
+      length = Math.hypot(...direction);
+    bounds
+      .moveTo([
+        center.x + (direction[0] / length) * distance,
+        center.y + (direction[1] / length) * distance,
+        center.z + (direction[2] / length) * distance,
+      ])
+      .lookAt({ target: center });
+  }, [bounds, revision, viewpoint]);
   return null;
 }
 function ResourceModel({
@@ -31,7 +51,7 @@ function ResourceModel({
     : reserved
       ? '#b48675'
       : r.kind === 'seat'
-        ? '#985864'
+        ? r.color
         : r.kind === 'space'
           ? r.ev
             ? '#5d9e86'
@@ -94,6 +114,7 @@ export default function Map3D({
 }) {
   const size = Math.max(floor.width, floor.depth);
   const [cameraRevision, setCameraRevision] = useState(0);
+  const [viewpoint, setViewpoint] = useState<Viewpoint>('overview');
   const dark = kind === 'cinema';
   return (
     <div
@@ -140,7 +161,7 @@ export default function Map3D({
         />
         <Suspense fallback={null}>
           <Bounds fit clip observe margin={1.15} maxDuration={0.35}>
-            <FitCamera revision={cameraRevision} />
+            <FitCamera revision={cameraRevision} viewpoint={viewpoint} />
             <group>
               <mesh receiveShadow position={[0, -0.15, 0]}>
                 <boxGeometry args={[floor.width + 0.4, 0.3, floor.depth + 0.4]} />
@@ -188,16 +209,25 @@ export default function Map3D({
                   <Scenery key={o.id} object={o} />
                 ))}
               </group>
-              {floor.resources.map((r) => (
-                <ResourceModel
-                  key={r.id}
-                  resource={r}
+              {kind === 'stadium' ? (
+                <StadiumSeats
                   floor={floor}
-                  selected={selected === r.id || selectedIds.includes(r.id)}
-                  reserved={busy.includes(r.id)}
+                  selected={selected ? [...selectedIds, selected] : selectedIds}
+                  busy={busy}
                   onSelect={onSelect}
                 />
-              ))}
+              ) : (
+                floor.resources.map((r) => (
+                  <ResourceModel
+                    key={r.id}
+                    resource={r}
+                    floor={floor}
+                    selected={selected === r.id || selectedIds.includes(r.id)}
+                    reserved={busy.includes(r.id)}
+                    onSelect={onSelect}
+                  />
+                ))
+              )}
             </group>
           </Bounds>
         </Suspense>
@@ -205,18 +235,36 @@ export default function Map3D({
           makeDefault
           minDistance={3}
           maxDistance={size * 3}
-          maxPolarAngle={Math.PI / 2.15}
+          maxPolarAngle={Math.PI / 2.02}
           enableDamping
         />
       </Canvas>
+      <div className="camera-viewpoints" aria-label="Camera viewpoints">
+        {(['overview', 'top', 'north', 'south', 'east', 'west'] as const).map((v) => (
+          <button
+            key={v}
+            className="secondary"
+            aria-label={`${v[0].toUpperCase() + v.slice(1)} camera view`}
+            onClick={() => {
+              setViewpoint(v);
+              setCameraRevision((n) => n + 1);
+            }}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
       <button
         className="camera-reset"
         aria-label="Reset 3D camera"
-        onClick={() => setCameraRevision((v) => v + 1)}
+        onClick={() => {
+          setViewpoint('overview');
+          setCameraRevision((v) => v + 1);
+        }}
       >
         ↺ Reset view
       </button>
-      <span className="map-scale">Drag to orbit · Scroll to zoom · Select a place to reserve</span>
+      <span className="map-scale">Drag to orbit · Right-drag to pan · Pinch or scroll to zoom</span>
     </div>
   );
 }

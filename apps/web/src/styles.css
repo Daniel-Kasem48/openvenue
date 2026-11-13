@@ -1395,3 +1395,33 @@ dialog select {
 .seat-chips .secondary {
   padding: 6px 9px;
 }
+/* Controls may reset inline touch-action while reconnecting; keep gestures on the map. */
+.three-stage canvas {
+  touch-action: none !important;
+}
+.camera-viewpoints {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 220px;
+  z-index: 2;
+}
+.camera-viewpoints button {
+  padding: 6px 8px;
+  font-size: 10px;
+  text-transform: capitalize;
+  background: #fffff4ed;
+}
+@media (max-width: 640px) {
+  .camera-viewpoints {
+    top: 85px;
+    left: 15px;
+    right: 15px;
+    max-width: none;
+    justify-content: flex-start;
+  }
+}

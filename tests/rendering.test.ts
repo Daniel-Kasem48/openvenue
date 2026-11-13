@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { makeTemplate } from '@openvenue/contracts';
+import { stadiumSeatParts } from '../apps/web/src/scene/StadiumSeats';
 import Map2D from '../apps/web/src/Map2D';
 it('uses the editable cinema screen without leaving the legacy screen behind', () => {
   const floor = makeTemplate('cinema').floors[0];
@@ -38,4 +39,16 @@ it('renders a stadium pitch only from editable scene objects', () => {
   expect(render()).toContain('Football pitch markings');
   floor.objects = floor.objects.filter((o) => o.kind !== 'pitch');
   expect(render()).not.toContain('Football pitch markings');
+});
+
+it('supports elevated seats even when saved stadiums have no terrace objects', () => {
+  const seat = makeTemplate('stadium').floors[0].resources[0];
+  for (const elevation of [0, 0.6, 1.2, 7.05]) {
+    const r = { ...seat, elevation };
+    const [y, , w, h, d] = stadiumSeatParts(r)[3];
+    expect(r.elevation + y - h / 2).toBeCloseTo(0);
+    expect(r.elevation + y + h / 2).toBeCloseTo(elevation);
+    expect(w * r.width).toBeGreaterThanOrEqual(r.width);
+    expect(d * r.depth).toBeGreaterThanOrEqual(r.depth);
+  }
 });

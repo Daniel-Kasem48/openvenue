@@ -266,6 +266,16 @@ export function LayoutInspector({
               />
             </label>
           )}
+          {resource.kind === 'seat' && (
+            <label>
+              Seat color
+              <input
+                type="color"
+                value={resource.color}
+                onChange={(e) => updateResource({ color: e.target.value })}
+              />
+            </label>
+          )}
           {resource.kind === 'table' && (
             <label>
               Table shape
