@@ -242,7 +242,16 @@ export default function App() {
     });
   };
   const moveResource = (id: string, x: number, y: number) => {
-    if (!draft) return;
+    if (!draft || !floor) return;
+    const item = [...floor.resources, ...floor.objects].find((item) => item.id === id);
+    if (!item) return;
+    const angle = (item.rotation * Math.PI) / 180;
+    const halfWidth =
+      (Math.abs(item.width * Math.cos(angle)) + Math.abs(item.depth * Math.sin(angle))) / 2;
+    const halfDepth =
+      (Math.abs(item.width * Math.sin(angle)) + Math.abs(item.depth * Math.cos(angle))) / 2;
+    x = Math.max(halfWidth, Math.min(floor.width - halfWidth, Math.round(x * 4) / 4));
+    y = Math.max(halfDepth, Math.min(floor.depth - halfDepth, Math.round(y * 4) / 4));
     updateLayout({
       ...draft.layout,
       floors: draft.layout.floors.map((f, i) =>
@@ -255,6 +264,7 @@ export default function App() {
           : f,
       ),
     });
+    return { x, y };
   };
   const save = () =>
     run(async () => {
@@ -951,6 +961,8 @@ export default function App() {
                           selectedIds={editing ? [] : selectedSeats}
                           busy={busy}
                           onSelect={selectPlace}
+                          editing={editing}
+                          onMove={moveResource}
                         />
                       </Suspense>
                     </SceneBoundary>

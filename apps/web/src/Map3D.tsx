@@ -1,6 +1,8 @@
-import { Suspense, useEffect, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { Bounds, OrbitControls, useBounds, useCursor } from '@react-three/drei';
+import type { Group } from 'three';
+import type { TransformControls as TransformControlsImpl } from 'three-stdlib';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { Bounds, OrbitControls, useBounds, useCursor, TransformControls } from '@react-three/drei';
 import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
 import { CinemaChair, DiningTable, ParkingBay } from './scene/Models';
 import { StadiumSeats } from './scene/StadiumSeats';
@@ -97,6 +99,50 @@ function ResourceModel({
     </group>
   );
 }
+function MoveHandle({
+  item,
+  floor,
+  onMove,
+}: {
+  item: Floor['resources'][number] | Floor['objects'][number];
+  floor: Floor;
+  onMove: (id: string, x: number, y: number) => { x: number; y: number } | undefined;
+}) {
+  const target = useRef<Group>(null!);
+  const controls = useRef<TransformControlsImpl>(null);
+  const canvas = useThree((state) => state.gl.domElement);
+  useEffect(() => {
+    const instance = controls.current;
+    instance?.connect(canvas);
+    return () => instance?.dispose();
+  }, [canvas]);
+  return (
+    <>
+      <group
+        ref={target}
+        position={[
+          item.x - floor.width / 2,
+          'elevation' in item ? item.elevation + 0.5 : item.height / 2,
+          item.y - floor.depth / 2,
+        ]}
+      />
+      <TransformControls
+        ref={controls}
+        object={target}
+        mode="translate"
+        showY={false}
+        translationSnap={0.25}
+        size={0.8}
+        onObjectChange={() => {
+          const position = target.current.position;
+          const next = onMove(item.id, position.x + floor.width / 2, position.z + floor.depth / 2);
+          if (next) position.set(next.x - floor.width / 2, position.y, next.y - floor.depth / 2);
+        }}
+      />
+    </>
+  );
+}
+
 export default function Map3D({
   floor,
   kind,
@@ -104,6 +150,8 @@ export default function Map3D({
   selectedIds = [],
   busy,
   onSelect,
+  editing = false,
+  onMove,
 }: {
   floor: Floor;
   kind: VenueKind;
@@ -111,7 +159,10 @@ export default function Map3D({
   selectedIds?: string[];
   busy: string[];
   onSelect: (id: string) => void;
+  editing?: boolean;
+  onMove?: (id: string, x: number, y: number) => { x: number; y: number } | undefined;
 }) {
+  const item = [...floor.resources, ...floor.objects].find((item) => item.id === selected);
   const size = Math.max(floor.width, floor.depth);
   const [cameraRevision, setCameraRevision] = useState(0);
   const [viewpoint, setViewpoint] = useState<Viewpoint>('overview');
@@ -133,11 +184,7 @@ export default function Map3D({
         <small>
           {floor.name} · {floor.resources.length} bookable places
         </small>
-        {selected && (
-          <span className="object-label">
-            Selected: {floor.resources.find((r) => r.id === selected)?.label}
-          </span>
-        )}
+        {selected && <span className="object-label">Selected: {item?.label}</span>}
       </div>
       <Canvas
         frameloop="demand"
@@ -206,7 +253,19 @@ export default function Map3D({
               </mesh>
               <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
                 {(floor.objects ?? []).map((o) => (
-                  <Scenery key={o.id} object={o} />
+                  <group
+                    key={o.id}
+                    onClick={
+                      editing
+                        ? (e) => {
+                            e.stopPropagation();
+                            if (e.delta < 4) onSelect(o.id);
+                          }
+                        : undefined
+                    }
+                  >
+                    <Scenery object={o} editing={editing} />
+                  </group>
                 ))}
               </group>
               {kind === 'stadium' ? (
@@ -231,6 +290,9 @@ export default function Map3D({
             </group>
           </Bounds>
         </Suspense>
+        {editing && item && onMove && (
+          <MoveHandle key={item.id} item={item} floor={floor} onMove={onMove} />
+        )}
         <OrbitControls
           makeDefault
           minDistance={3}
@@ -265,6 +327,7 @@ export default function Map3D({
         ↺ Reset view
       </button>
       <span className="map-scale">
+        {editing && <span>Select an item · Drag its arrows to move · </span>}
         <kbd>Ctrl</kbd> + drag to pan · Drag to rotate · Pinch/scroll to zoom
       </span>
     </div>

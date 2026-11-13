@@ -1,8 +1,14 @@
 import { useEffect, useMemo } from 'react';
-import { CanvasTexture, SRGBColorSpace } from 'three';
+import { CanvasTexture, SRGBColorSpace, Sprite } from 'three';
 import type { SceneObject } from '@openvenue/contracts';
 
-export function SceneLabel({ object: o }: { object: SceneObject }) {
+export function SceneLabel({
+  object: o,
+  editing = false,
+}: {
+  object: SceneObject;
+  editing?: boolean;
+}) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
@@ -29,7 +35,7 @@ export function SceneLabel({ object: o }: { object: SceneObject }) {
       position={[0, o.height, 0]}
       scale={[o.width, o.depth, 1]}
       renderOrder={10}
-      raycast={() => {}}
+      raycast={editing ? Sprite.prototype.raycast : () => {}}
     >
       <spriteMaterial
         map={texture}

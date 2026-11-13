@@ -4,11 +4,17 @@ import { Shape } from 'three';
 import type { SceneObject } from '@openvenue/contracts';
 import { Box, Cylinder, Car } from './Models';
 const rampProfile = new Shape().moveTo(0, 0).lineTo(1, 0).lineTo(1, 1).closePath();
-export function Scenery({ object: o }: { object: SceneObject }) {
+export function Scenery({
+  object: o,
+  editing = false,
+}: {
+  object: SceneObject;
+  editing?: boolean;
+}) {
   const { width: w, depth: d, height: h, color: c } = o;
   return (
     <group position={[o.x, 0, o.y]} rotation={[0, (-o.rotation * Math.PI) / 180, 0]}>
-      {o.kind === 'label' && <SceneLabel object={o} />}
+      {o.kind === 'label' && <SceneLabel object={o} editing={editing} />}
       {o.kind === 'pitch' && <StadiumPitch width={w} depth={d} height={h} color={c} />}
       {o.kind === 'plant' && (
         <group scale={[w, h / 1.5, d]}>

@@ -638,3 +638,86 @@ test('layout studio keeps the canvas stable and finds editable items by name', a
   await expect(page.getByRole('button', { name: 'Save layout', exact: true })).toBeInViewport();
   await page.screenshot({ path: '/tmp/openvenue-editor-mobile.png', fullPage: true });
 });
+
+test('operator drags objects in both views and persists movement and deletion', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password', { exact: true }).fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New venue' }).click();
+  const name = `Movement ${Date.now()}`;
+  await page.getByLabel('Venue name').fill(name);
+  await page.getByLabel('Starting layout').selectOption('empty');
+  await page.getByRole('button', { name: 'Create venue' }).click();
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  await page.getByRole('button', { name: '+ counter', exact: true }).click();
+  const object = page.getByRole('button', { name: 'Select Counter', exact: true });
+  const box = (await object.boundingBox())!;
+  const x = page.getByLabel('x', { exact: true });
+  const initial = Number(await x.inputValue());
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(initial);
+  const after2D = Number(await x.inputValue());
+  await page.getByRole('button', { name: '3D view' }).click();
+  await page.getByRole('button', { name: 'Top camera view' }).click();
+  const canvas = page.locator('canvas');
+  await page.waitForTimeout(600);
+  // Locate the red X handle in the rendered canvas, then drag it with a real pointer.
+  const png = (await canvas.screenshot()).toString('base64');
+  const handle = await page.evaluate(async (png) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${png}`;
+    await image.decode();
+    const bitmap = document.createElement('canvas');
+    bitmap.width = image.width;
+    bitmap.height = image.height;
+    const context = bitmap.getContext('2d')!;
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    const pixels: { x: number; y: number }[] = [];
+    for (let y = 0; y < bitmap.height; y++)
+      for (let x = 0; x < bitmap.width; x++) {
+        const i = (y * bitmap.width + x) * 4;
+        if (data[i] > 180 && data[i + 1] < 100 && data[i + 2] < 100) pixels.push({ x, y });
+      }
+    if (!pixels.length) throw new Error('Move arrow is not visible');
+    pixels.sort((a, b) => b.x - a.x);
+    return pixels[Math.min(10, pixels.length - 1)];
+  }, png);
+  const area = (await canvas.boundingBox())!;
+  await page.mouse.move(area.x + handle.x, area.y + handle.y);
+  await page.mouse.down();
+  await page.mouse.move(area.x + handle.x + 35, area.y + handle.y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(after2D);
+  const moved = Number(await x.inputValue());
+  await page.getByRole('button', { name: 'Save layout', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  const saved = (await (await page.request.get('/api/venues')).json()).find(
+    (v: any) => v.name === name,
+  );
+  expect(saved.layout.floors[0].objects[0].x).toBe(moved);
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  await page.getByRole('button', { name: '3D view' }).click();
+  await expect(page.getByRole('button', { name: 'Remove object' })).toBeInViewport();
+  await page.getByRole('button', { name: 'Remove object' }).click();
+  await expect(page.getByLabel('Object label')).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Add resource', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Remove resource' })).toBeInViewport();
+  await page.getByRole('button', { name: 'Remove resource' }).click();
+  await expect(page.getByLabel('Resource label')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save layout', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  await page.reload();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Select Counter', exact: true })).toHaveCount(0);
+});

@@ -79,7 +79,7 @@ export function LayoutInspector({
       <p className="muted">
         {view === '2d'
           ? 'Drag items to move them. Drag empty space to pan.'
-          : 'Preview in 3D. Select an item to edit its properties; switch to 2D to drag it.'}
+          : 'Select an item, then drag its arrows to move it. Changes apply when you save.'}
       </p>
       <details className="object-library">
         <summary>Find an item · {items.length} on this floor</summary>
@@ -116,6 +116,38 @@ export function LayoutInspector({
         <p className="muted">Click an item on the map, find it by name, or add one below.</p>
       )}
       {object && (
+        <button
+          className="text-button danger"
+          onClick={() => {
+            updateObjects((floor.objects ?? []).filter((o) => o.id !== selected));
+            setSelected('');
+          }}
+        >
+          Remove object
+        </button>
+      )}
+      {resource && (
+        <button
+          className="text-button danger"
+          onClick={() => {
+            updateLayout({
+              ...draft!.layout,
+              floors: draft!.layout.floors.map((f, i) =>
+                i === floorIndex
+                  ? {
+                      ...f,
+                      resources: f.resources.filter((r) => r.id !== selected),
+                    }
+                  : f,
+              ),
+            });
+            setSelected('');
+          }}
+        >
+          Remove resource
+        </button>
+      )}
+      {object && (
         <div className="resource-editor">
           <label>
             Object label
@@ -146,15 +178,6 @@ export function LayoutInspector({
               onChange={(e) => patchObject({ color: e.target.value })}
             />
           </label>
-          <button
-            className="text-button danger"
-            onClick={() => {
-              updateObjects((floor.objects ?? []).filter((o) => o.id !== selected));
-              setSelected('');
-            }}
-          >
-            Remove object
-          </button>
         </div>
       )}
       {resource && (
@@ -247,25 +270,6 @@ export function LayoutInspector({
               EV charging
             </label>
           )}
-          <button
-            className="text-button danger"
-            onClick={() => {
-              updateLayout({
-                ...draft!.layout,
-                floors: draft!.layout.floors.map((f, i) =>
-                  i === floorIndex
-                    ? {
-                        ...f,
-                        resources: f.resources.filter((r) => r.id !== selected),
-                      }
-                    : f,
-                ),
-              });
-              setSelected('');
-            }}
-          >
-            Remove resource
-          </button>
         </div>
       )}
       <details className="object-library" open>

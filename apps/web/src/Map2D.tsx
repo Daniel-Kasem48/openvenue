@@ -44,16 +44,8 @@ export default function Map2D({
   };
   const move = (event: React.PointerEvent) => {
     if (drag.current) {
-      const p = point(event),
-        r = [...floor.resources, ...(floor.objects ?? [])].find((r) => r.id === drag.current!.id)!;
-      const a = (r.rotation * Math.PI) / 180,
-        ex = (Math.abs(r.width * Math.cos(a)) + Math.abs(r.depth * Math.sin(a))) / 2,
-        ey = (Math.abs(r.width * Math.sin(a)) + Math.abs(r.depth * Math.cos(a))) / 2;
-      onMove(
-        r.id,
-        Math.max(ex, Math.min(floor.width - ex, Math.round((p.x - drag.current.dx) * 4) / 4)),
-        Math.max(ey, Math.min(floor.depth - ey, Math.round((p.y - drag.current.dy) * 4) / 4)),
-      );
+      const p = point(event);
+      onMove(drag.current.id, p.x - drag.current.dx, p.y - drag.current.dy);
     } else if (panDrag.current) {
       const d = panDrag.current;
       setPan({
