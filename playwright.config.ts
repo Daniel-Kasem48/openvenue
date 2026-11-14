@@ -5,7 +5,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:3189', headless: true },
   webServer: {
     command: 'npm run build && npm start',
-    env: { PORT: '3189' },
+    env: { PORT: '3189', ANTHROPIC_API_KEY: '' },
     url: 'http://127.0.0.1:3189/api/health',
     reuseExistingServer: false,
     timeout: 60000,

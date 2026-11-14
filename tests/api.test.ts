@@ -49,6 +49,16 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     });
     expect(res.status).toBe(403);
   });
+  it('protects scene generation and reports missing configuration without changing saved data', async () => {
+    const path = `/venues/${venue.id}/generate-scene`;
+    expect((await request(path, { prompt: 'A restaurant with six tables' })).status).toBe(401);
+    expect((await request(path, { prompt: 'short' }, true)).status).toBe(400);
+    const result = await request(path, { prompt: 'A restaurant with six tables' }, true);
+    expect(result.status).toBe(503);
+    expect((await result.json()).message).toContain('ANTHROPIC_API_KEY');
+    const venues = await (await request('/venues')).json();
+    expect(venues.find((item: any) => item.id === venue.id).layout).toEqual(venue.layout);
+  });
   it('accepts the configured HTTPS origin behind a proxy', async () => {
     const res = await fetch(base + '/api/auth/login', {
       method: 'POST',

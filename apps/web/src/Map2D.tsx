@@ -102,6 +102,7 @@ export default function Map2D({
             <g
               key={o.id}
               transform={'translate(' + o.x + ' ' + o.y + ') rotate(' + o.rotation + ')'}
+              className="map-object"
               role={editing ? 'button' : undefined}
               tabIndex={editing ? 0 : undefined}
               aria-label={editing ? 'Select ' + o.label : undefined}
@@ -120,6 +121,18 @@ export default function Map2D({
               }}
             >
               <Object2D object={o} />
+              <rect
+                className="object-focus-ring"
+                x={-o.width / 2 - 0.06}
+                y={-o.depth / 2 - 0.06}
+                width={o.width + 0.12}
+                height={o.depth + 0.12}
+                fill="none"
+                stroke="#315d38"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
               {selected === o.id && (
                 <rect
                   x={-o.width / 2 - 0.08}
@@ -256,6 +269,7 @@ export default function Map2D({
             <g
               key={o.id}
               transform={`translate(${o.x} ${o.y}) rotate(${o.rotation})`}
+              className="map-object"
               role={editing ? 'button' : undefined}
               tabIndex={editing ? 0 : undefined}
               aria-label={editing ? `Select block ${o.label}` : `Block ${o.label}`}
@@ -274,6 +288,18 @@ export default function Map2D({
               }}
             >
               <Object2D object={o} />
+              <rect
+                className="object-focus-ring"
+                x={-o.width / 2 - 0.06}
+                y={-o.depth / 2 - 0.06}
+                width={o.width + 0.12}
+                height={o.depth + 0.12}
+                fill="none"
+                stroke="#315d38"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
               {selected === o.id && (
                 <rect
                   x={-o.width / 2}

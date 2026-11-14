@@ -1,5 +1,6 @@
 import { Modal } from './Modal';
 import { SceneBoundary } from './SceneBoundary';
+import { GenerateSceneDialog } from './GenerateSceneDialog';
 import { LayoutInspector } from './LayoutInspector';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
@@ -43,7 +44,7 @@ export default function App() {
     [editing, setEditing] = useState(false),
     [dirty, setDirty] = useState(false),
     [tab, setTab] = useState<'map' | 'bookings'>('map');
-  const [modal, setModal] = useState<'login' | 'venue' | 'show' | null>(null),
+  const [modal, setModal] = useState<'login' | 'venue' | 'show' | 'generate' | null>(null),
     [source, setSource] = useState<Venue | null>(null);
   const [kind, setKind] = useState<VenueKind>('restaurant'),
     [newName, setNewName] = useState(''),
@@ -840,6 +841,9 @@ export default function App() {
                       <button className="text-button" onClick={() => openCreate(current)}>
                         Duplicate
                       </button>
+                      <button className="secondary" onClick={() => setModal('generate')}>
+                        Generate with Claude
+                      </button>
                       {editing ? (
                         <>
                           <button
@@ -1187,6 +1191,26 @@ export default function App() {
           </footer>
         </div>
       </main>
+      {modal === 'generate' && current && (
+        <GenerateSceneDialog
+          venueId={current.id}
+          kind={current.kind}
+          onClose={() => setModal(null)}
+          onApply={(layout) => {
+            setDraft({ ...current, layout });
+            setEditing(true);
+            setDirty(true);
+            setFloorIndex(0);
+            setSelected('');
+            setSelectedSeats([]);
+            setView('3d');
+            setModal(null);
+            setMessage(
+              'Generated scene added to your draft. Review it, then Save layout to publish.',
+            );
+          }}
+        />
+      )}
       {modal === 'login' && (
         <Modal title="Admin sign in" onClose={closeLogin}>
           <p className="muted">Sign in to manage venues, layouts and reservations.</p>

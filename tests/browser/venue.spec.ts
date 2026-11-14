@@ -1,3 +1,4 @@
+import { makeTemplate } from '@openvenue/contracts';
 import { expect, test } from '@playwright/test';
 test('operator creates a template, edits a map and manages a reservation', async ({ page }) => {
   const venueName = `Browser restaurant ${Date.now()}`;
@@ -271,6 +272,10 @@ test('stadium is editable data, supports seat counts and saves per-seat prices',
     .click();
   await page.getByRole('button', { name: 'Edit layout' }).click();
   await page.getByRole('button', { name: 'Select North A1', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Select North A1', exact: true })).toHaveCSS(
+    'outline-style',
+    'none',
+  );
   await page.getByLabel('Reservation price', { exact: true }).fill('12.50');
   await page.getByRole('button', { name: 'Select Football pitch', exact: true }).click();
   await page.getByLabel('Object label').fill('Custom pitch');
@@ -659,6 +664,7 @@ test('operator drags objects in both views and persists movement and deletion', 
   const initial = Number(await x.inputValue());
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
+  await expect(object).toHaveCSS('outline-style', 'none');
   await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2, { steps: 8 });
   await page.mouse.up();
   await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(initial);
@@ -720,4 +726,58 @@ test('operator drags objects in both views and persists movement and deletion', 
     .click();
   await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Select Counter', exact: true })).toHaveCount(0);
+});
+
+test('generated scenes are previewed before applying and saved only on explicit save', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password', { exact: true }).fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'New venue' }).click();
+  const name = `Generated preview ${Date.now()}`;
+  await page.getByLabel('Venue name').fill(name);
+  await page.getByLabel('Starting layout').selectOption('empty');
+  await page.getByRole('button', { name: 'Create venue' }).click();
+  const venue = (await (await page.request.get('/api/venues')).json()).find(
+    (v: any) => v.name === name,
+  );
+  await page.getByRole('button', { name: 'Generate with Claude' }).click();
+  await page.getByRole('button', { name: 'Use example description' }).click();
+  await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('ANTHROPIC_API_KEY');
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  const generated = makeTemplate('restaurant');
+  generated.floors[0].name = 'AI dining room';
+  await page.route('**/api/venues/*/generate-scene', (route) =>
+    route.fulfill({ json: { summary: 'A dining room with clear aisles.', layout: generated } }),
+  );
+  await page.getByRole('button', { name: 'Generate with Claude' }).click();
+  await page
+    .getByLabel('Describe your scene')
+    .fill('A restaurant with twelve tables and a counter');
+  await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
+  await expect(page.getByText('A dining room with clear aisles.')).toBeVisible();
+  const savedBefore = (await (await page.request.get('/api/venues')).json()).find(
+    (v: any) => v.id === venue.id,
+  );
+  expect(savedBefore.layout.floors[0].resources).toHaveLength(0);
+  await page.getByRole('button', { name: 'Use this layout' }).click();
+  await expect(page.getByRole('button', { name: '3D view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible();
+  const stillSaved = (await (await page.request.get('/api/venues')).json()).find(
+    (v: any) => v.id === venue.id,
+  );
+  expect(stillSaved.layout.floors[0].resources).toHaveLength(0);
+  await page.getByRole('button', { name: 'Save layout', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  const savedAfter = (await (await page.request.get('/api/venues')).json()).find(
+    (v: any) => v.id === venue.id,
+  );
+  expect(savedAfter.layout.floors[0].name).toBe('AI dining room');
+  expect(savedAfter.layout.floors[0].resources).toHaveLength(12);
 });

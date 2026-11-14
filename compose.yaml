@@ -21,6 +21,8 @@ services:
     environment:
       DATABASE_URL: postgresql://openvenue:${POSTGRES_PASSWORD:-openvenue-local}@db:5432/openvenue
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (at least 16 characters)}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3188}
     depends_on:
       db:

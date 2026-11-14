@@ -1434,7 +1434,7 @@ dialog select {
   max-width: calc(100% - 165px);
 }
 
-.map-resource:focus-visible {
+.map-stage svg [role='button']:focus {
   outline: none;
 }
 .resource-focus-ring {
@@ -1494,4 +1494,35 @@ dialog select {
   .layout-editor .three-stage {
     min-height: 350px;
   }
+}
+
+.map-stage svg .map-object:focus-visible > .object-focus-ring {
+  visibility: visible;
+}
+.object-focus-ring {
+  visibility: hidden;
+}
+
+.scene-generation-dialog {
+  width: min(800px, calc(100vw - 32px));
+  max-width: 800px;
+}
+.scene-generation-dialog textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 130px;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.scene-generation-dialog textarea:focus-visible {
+  outline: 3px solid #7f9d4c;
+}
+.generated-scene-preview .map-stage {
+  height: 360px;
+  min-height: 360px;
+}
+.panel-actions {
+  flex-wrap: wrap;
 }

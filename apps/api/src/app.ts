@@ -21,6 +21,7 @@ import {
 } from '@openvenue/contracts';
 import { initialize, syncResources, transaction } from './database';
 import { authentication, tokenHash } from './auth';
+import { generateScene, SceneGenerationError } from './scene-generation';
 
 class RootModule {}
 Module({})(RootModule);
@@ -33,6 +34,8 @@ export async function createApp(config: {
   adminPassword: string;
   secureCookies: boolean;
   publicOrigin?: string;
+  anthropicApiKey?: string;
+  anthropicModel?: string;
 }) {
   if (config.adminPassword.length < 16)
     throw new Error('ADMIN_PASSWORD must contain at least 16 characters');
@@ -102,6 +105,28 @@ export async function createApp(config: {
         tokenHash(token),
       ]);
       res.cookie('ov_session', token, cookieOptions).json({ authenticated: true });
+    },
+  );
+  router.post(
+    '/venues/:id/generate-scene',
+    guard,
+    rateLimit({
+      windowMs: 15 * 60000,
+      limit: 5,
+      legacyHeaders: false,
+      message: { message: 'Too many scene generations. Please wait before trying again.' },
+    }),
+    async (req, res) => {
+      const { prompt } = z.object({ prompt: z.string().trim().min(10).max(4000) }).parse(req.body);
+      const id = z.uuid().parse(req.params.id);
+      const venue = await pool.query('SELECT kind FROM venues WHERE id=$1', [id]);
+      if (!venue.rowCount) fail(404, 'Venue not found');
+      res.json(
+        await generateScene(prompt, venue.rows[0].kind, {
+          apiKey: config.anthropicApiKey,
+          model: config.anthropicModel,
+        }),
+      );
     },
   );
   router.get('/auth/me', guard, (_req, res) => {
@@ -340,9 +365,11 @@ export async function createApp(config: {
         ? 'That resource was just reserved. Choose another time or place.'
         : error.code === '23503'
           ? 'Cannot remove a resource with reservation history.'
-          : status >= 500
-            ? 'Something went wrong. Please try again.'
-            : error.message;
+          : error instanceof SceneGenerationError
+            ? error.message
+            : status >= 500
+              ? 'Something went wrong. Please try again.'
+              : error.message;
     if (status >= 500) console.error('API failure', error.code ?? error.name);
     res.status(status).json({ message });
   };

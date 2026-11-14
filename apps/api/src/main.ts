@@ -18,6 +18,8 @@ if (PUBLIC_ORIGIN) {
 }
 const app = await createApp({
   databaseUrl: DATABASE_URL,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  anthropicModel: process.env.ANTHROPIC_MODEL,
   adminPassword: ADMIN_PASSWORD,
   secureCookies: PUBLIC_ORIGIN?.startsWith('https://') ?? false,
   publicOrigin: NODE_ENV === 'production' ? PUBLIC_ORIGIN : undefined,

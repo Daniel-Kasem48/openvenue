@@ -147,3 +147,28 @@ proxy handling before high-volume use behind a proxy.
 - Initial schema is idempotent; future releases need explicit versioned migrations.
 
 MIT licensed. Contributions welcome; run the checks above before submitting a PR.
+
+## Generate scenes with Claude
+
+Set `ANTHROPIC_API_KEY` in the server's untracked `.env`. Optionally set
+`ANTHROPIC_MODEL` (default `claude-sonnet-4-6`, which supports structured JSON
+outputs). For Docker, apply environment changes with `docker compose up -d app`.
+Never put the key in a `VITE_*` variable or commit it.
+
+Sign in, open a venue, and choose **Generate with Claude**. Describe floor dimensions,
+places, aisles, furnishings, and prices. Review the 3D preview, choose **Use this
+layout**, adjust it in the editor, then **Save layout**. Applying a generated scene
+replaces the whole current draft, including every floor; previewing does not save
+anything. For an existing venue with reservation history, generate into a new venue
+instead: replacing booked resources is protected by database constraints.
+
+Only the supplied description and venue category are sent to Anthropic—not guest
+records or existing bookings. Calls use the workspace's API credits, are limited to
+five requests per 15 minutes per client address, and have a 90-second timeout.
+Closing the dialog cancels the browser request but may not stop provider billing.
+Output is validated on the server, expands repeated rows into normal editable
+resources, and uses the existing PostgreSQL layout storage when saved. Invalid,
+truncated, refused, or off-floor output is rejected without changing saved data.
+Generated geometry is a starting point, not an accessibility or building-code assessment.
+
+Provider reference: [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).

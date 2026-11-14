@@ -3,10 +3,12 @@ export function Modal({
   title,
   children,
   onClose,
+  className,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -14,7 +16,7 @@ export function Modal({
     ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose}>
+    <dialog className={className} ref={ref} onCancel={onClose}>
       <div className="modal-head">
         <h2>{title}</h2>
         <button aria-label="Close dialog" onClick={onClose}>
