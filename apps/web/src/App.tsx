@@ -71,6 +71,10 @@ export default function App() {
     [availabilityReady, setAvailabilityReady] = useState(false),
     [guest, setGuest] = useState(''),
     [bookings, setBookings] = useState<Booking[]>([]);
+  const [attendeeSearch, setAttendeeSearch] = useState('');
+  const filteredBookings = bookings.filter((booking) =>
+    booking.guestName.toLowerCase().includes(attendeeSearch.trim().toLowerCase()),
+  );
   const [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [working, setWorking] = useState(false),
@@ -625,11 +629,24 @@ export default function App() {
             <section className="panel booking-list">
               <div className="panel-title">
                 <h2>Reservations</h2>
-                <span className="pill">{bookings.length} active</span>
+                <span className="pill">{filteredBookings.length} active</span>
               </div>
               <p className="muted">Upcoming and past confirmed reservations · Showing up to 500</p>
+              <label className="attendee-search">
+                Search attendees
+                <input
+                  type="search"
+                  value={attendeeSearch}
+                  onChange={(event) => setAttendeeSearch(event.target.value)}
+                  placeholder="Search by guest name"
+                />
+              </label>
               {bookings.length === 0 ? (
                 <div className="empty">No reservations yet. Your next guest starts on the map.</div>
+              ) : filteredBookings.length === 0 ? (
+                <div className="empty" role="status">
+                  No reservations match this attendee.
+                </div>
               ) : (
                 <div className="table-scroll">
                   <table>
@@ -643,7 +660,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bookings.map((b) => (
+                      {filteredBookings.map((b) => (
                         <tr key={b.id}>
                           <td>
                             {b.guestName}

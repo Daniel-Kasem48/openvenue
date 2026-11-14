@@ -761,6 +761,15 @@ input[type='checkbox'] {
 .booking-list > .muted {
   padding: 0 24px;
 }
+.attendee-search {
+  margin: 0 24px 20px;
+  width: calc(100% - 48px);
+  max-width: 360px;
+  font-size: 12px;
+}
+.attendee-search input {
+  font-size: 14px;
+}
 .table-scroll {
   overflow: auto;
 }

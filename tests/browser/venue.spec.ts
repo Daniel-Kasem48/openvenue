@@ -43,6 +43,14 @@ test('operator creates a template, edits a map and manages a reservation', async
   await expect(
     page.getByRole('row').filter({ hasText: venueName }).getByText('Browser Guest'),
   ).toBeVisible();
+  const attendeeSearch = page.getByRole('searchbox', { name: 'Search attendees' });
+  await attendeeSearch.fill('  bRoWsEr  ');
+  await expect(page.getByRole('row').filter({ hasText: venueName })).toBeVisible();
+  await attendeeSearch.fill('no-such-attendee-123');
+  await expect(page.getByText('No reservations match this attendee.')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: venueName })).toHaveCount(0);
+  await attendeeSearch.fill('');
+  await expect(page.getByRole('row').filter({ hasText: venueName })).toBeVisible();
   await page
     .getByRole('row')
     .filter({ hasText: venueName })
