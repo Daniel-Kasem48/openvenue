@@ -1,3 +1,4 @@
+import { EventSeatControls } from './EventSeatControls';
 import { Modal } from './Modal';
 import { SceneBoundary } from './SceneBoundary';
 import { GenerateSceneDialog } from './GenerateSceneDialog';
@@ -5,6 +6,9 @@ import { LayoutInspector } from './LayoutInspector';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import {
   reservationPrice,
+  seatLocation,
+  seatIdentity,
+  seatSection,
   formatPrice,
   cloneLayout,
   intervalSchema,
@@ -67,6 +71,16 @@ export default function App() {
   const [shows, setShows] = useState<Show[]>([]),
     [showId, setShowId] = useState(''),
     [showTitle, setShowTitle] = useState('');
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const [managingSeats, setManagingSeats] = useState(false);
+  const [managedIds, setManagedIds] = useState<string[]>([]);
+  const [selectionScope, setSelectionScope] = useState<'seat' | 'row' | 'block'>('seat');
+  useEffect(() => {
+    setManagedIds([]);
+  }, [venueId, showId, floorIndex, managingSeats]);
+  useEffect(() => {
+    setManagingSeats(false);
+  }, [venueId, editing, admin]);
   const [busy, setBusy] = useState<string[]>([]),
     [availabilityReady, setAvailabilityReady] = useState(false),
     [guest, setGuest] = useState(''),
@@ -101,6 +115,34 @@ export default function App() {
     setSelectedSeats((current) => current.filter((id) => ids.has(id)));
   }, [venue]);
   const selectPlace = (id: string) => {
+    if (admin && managingSeats && floor) {
+      const seat = floor.resources.find((r) => r.id === id);
+      if (!seat) return;
+      const row = seatIdentity(seat).row;
+      const ids =
+        selectionScope === 'seat'
+          ? [id]
+          : floor.resources
+              .filter(
+                (r) =>
+                  r.kind === 'seat' &&
+                  seatSection(r) === seatSection(seat) &&
+                  (selectionScope === 'block'
+                    ? !!seatSection(seat)
+                    : !!row && seatIdentity(r).row === row),
+              )
+              .map((r) => r.id);
+      if (!ids.length) {
+        setError('This seat needs a block or row label before group selection.');
+        return;
+      }
+      setManagedIds((previous) =>
+        ids.every((id) => previous.includes(id))
+          ? previous.filter((id) => !ids.includes(id))
+          : [...new Set([...previous, ...ids])],
+      );
+      return;
+    }
     if (editing || !seatVenue) {
       setSelected(id);
       return;
@@ -181,15 +223,17 @@ export default function App() {
   useEffect(() => {
     setAvailabilityReady(false);
     setBusy([]);
+    setBlocked([]);
     if (!venueId || !timeStart || !timeEnd || (seatVenue && !showId)) return;
     const controller = new AbortController();
     const update = () =>
-      api<{ busy: string[] }>(
-        `/venues/${venueId}/availability?${new URLSearchParams({ start: timeStart, end: timeEnd })}`,
+      api<{ busy: string[]; blocked: string[] }>(
+        `/venues/${venueId}/availability?${new URLSearchParams({ start: timeStart, end: timeEnd, ...(seatVenue ? { showId } : {}) })}`,
         { signal: controller.signal },
       )
         .then((data) => {
           setBusy(data.busy);
+          setBlocked(data.blocked ?? []);
           setAvailabilityReady(true);
         })
         .catch((e) => {
@@ -328,7 +372,7 @@ export default function App() {
       setRefresh((v) => v + 1);
       setGuest('');
       setMessage(
-        `Reservation confirmed for ${bookingResources.map((r) => `${r.section ? `Block ${r.section} · ` : ''}${r.label}`).join(', ')}.`,
+        `Reservation confirmed for ${bookingResources.map((r) => seatLocation(r)).join(', ')}.`,
       );
     });
   const showBookings = () =>
@@ -668,7 +712,7 @@ export default function App() {
                           </td>
                           <td>
                             {b.venueName}
-                            <small>{b.resourceLabel}</small>
+                            <small>{b.seatLocation ?? b.resourceLabel}</small>
                           </td>
                           <td>
                             {b.partySize} {b.partySize === 1 ? 'guest' : 'guests'}
@@ -764,9 +808,13 @@ export default function App() {
                   {confirmed
                     .map(
                       (b) =>
-                        venue?.layout.floors
-                          .flatMap((f) => f.resources)
-                          .find((r) => r.id === b.resourceId)?.label,
+                        b.seatLocation ??
+                        (() => {
+                          const seat = venue?.layout.floors
+                            .flatMap((f) => f.resources)
+                            .find((r) => r.id === b.resourceId);
+                          return seat ? seatLocation(seat) : 'Seat';
+                        })(),
                     )
                     .join(', ')}
                 </dd>
@@ -853,6 +901,15 @@ export default function App() {
                   </div>
                 </div>
                 <div className="panel-actions">
+                  {admin && seatVenue && !editing && (
+                    <button
+                      className="secondary"
+                      disabled={!showId}
+                      onClick={() => setManagingSeats(!managingSeats)}
+                    >
+                      {managingSeats ? 'Done managing seats' : 'Manage event seats'}
+                    </button>
+                  )}
                   {admin && (
                     <>
                       <button className="text-button" onClick={() => openCreate(current)}>
@@ -937,6 +994,10 @@ export default function App() {
                     <i className="selected" />
                     Selected
                   </span>
+                  <span>
+                    <i className="blocked" />
+                    Blocked
+                  </span>
                 </div>
                 <div className="view-toggle">
                   <button
@@ -965,8 +1026,9 @@ export default function App() {
                       floor={floor}
                       kind={current.kind}
                       selected={selected}
-                      selectedIds={editing ? [] : selectedSeats}
+                      selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
                       busy={busy}
+                      blocked={blocked}
                       editing={editing}
                       onSelect={selectPlace}
                       onMove={moveResource}
@@ -979,8 +1041,9 @@ export default function App() {
                           floor={floor}
                           kind={current.kind}
                           selected={selected}
-                          selectedIds={editing ? [] : selectedSeats}
+                          selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
                           busy={busy}
+                          blocked={blocked}
                           onSelect={selectPlace}
                           editing={editing}
                           onMove={moveResource}
@@ -1023,6 +1086,27 @@ export default function App() {
                       exportLayout={exportLayout}
                       importLayout={importLayout}
                     />
+                  ) : managingSeats && admin && showId ? (
+                    <>
+                      {timeFields}
+                      <EventSeatControls
+                        key={venueId + showId + floor.id}
+                        venueId={venueId}
+                        showId={showId}
+                        floor={floor}
+                        selectedIds={managedIds}
+                        blockedIds={blocked}
+                        scope={selectionScope}
+                        onScope={setSelectionScope}
+                        onClear={() => setManagedIds([])}
+                        run={run}
+                        working={working}
+                        onChanged={(text) => {
+                          setMessage(text);
+                          setRefresh((v) => v + 1);
+                        }}
+                      />
+                    </>
                   ) : (
                     <>
                       <div className="eyebrow">
@@ -1052,9 +1136,7 @@ export default function App() {
                         </span>
                         <strong>
                           {bookingResources.length
-                            ? bookingResources
-                                .map((r) => `${r.section ? `Block ${r.section} · ` : ''}${r.label}`)
-                                .join(', ')
+                            ? bookingResources.map((r) => seatLocation(r)).join(', ')
                             : 'Your spot is waiting'}
                         </strong>
                         <small>
@@ -1082,7 +1164,7 @@ export default function App() {
                               onClick={() => selectPlace(r.id)}
                               aria-label={`Remove ${r.label}`}
                             >
-                              {r.label} ×
+                              {seatLocation(r)} ×
                             </button>
                           ))}
                         </div>
@@ -1109,7 +1191,7 @@ export default function App() {
                         <div className="price-summary" aria-label="Reservation price summary">
                           {bookingResources.map((r) => (
                             <p key={r.id}>
-                              {r.label}
+                              {seatLocation(r)}
                               <strong>
                                 {formatPrice(reservationPrice(venue!.layout, r), currency)}
                               </strong>
@@ -1143,13 +1225,17 @@ export default function App() {
                                   busy.includes(r.id) || (!seatVenue && r.capacity < partySize)
                                 }
                               >
-                                {r.label}
-                                {r.section ? ` · Block ${r.section}` : ''}
+                                {seatLocation(r)}
+
                                 {selectedSeats.includes(r.id) ? ' · Selected' : ''}
                                 {venue?.layout.pricing.mode !== 'free'
                                   ? ` · ${formatPrice(reservationPrice(venue!.layout, r), currency)}`
                                   : ''}
-                                {busy.includes(r.id) ? ' · Reserved' : ''}
+                                {busy.includes(r.id)
+                                  ? blocked.includes(r.id)
+                                    ? ' · Blocked'
+                                    : ' · Reserved'
+                                  : ''}
                               </option>
                             ))}
                           </select>

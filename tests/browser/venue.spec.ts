@@ -140,7 +140,7 @@ test('3D scene is the default and all venue types expose selectable models', asy
   for (const [kind, resource] of [
     ['restaurant', 'Table 1'],
     ['parking', 'P1-01'],
-    ['cinema', 'A1'],
+    ['cinema', 'Row A · Seat 1'],
   ]) {
     const name = '3D ' + kind + ' ' + Date.now();
     await request.post('/api/venues', { data: { kind, name } });
@@ -319,7 +319,7 @@ test('stadium is editable data, supports seat counts and saves per-seat prices',
   await page.getByRole('button', { name: 'Confirm reservation' }).click();
   const receipt = page.getByRole('region', { name: 'Booking confirmation' });
   await expect(receipt).toContainText('$57.50');
-  await expect(receipt).toContainText('North A1, North A2');
+  await expect(receipt).toContainText('Block 60 · Row A · Seat 1, Block 60 · Row A · Seat 2');
 });
 
 test('guest can replace a seat removed by an operator after review', async ({ page, request }) => {
@@ -338,7 +338,9 @@ test('guest can replace a seat removed by an operator after review', async ({ pa
   await page.goto('/');
   await page.getByRole('button', { name: `Book ${name} →`, exact: true }).click();
   await page.getByRole('button', { name: 'Choose a place' }).click();
-  await page.getByRole('combobox', { name: 'Resource', exact: true }).selectOption({ label: 'A1' });
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption({ label: 'Row A · Seat 1' });
   await page.getByRole('button', { name: 'Review reservation' }).click();
   await page.getByLabel('Guest name').fill('Guest with removed seat');
   venue.layout.floors[0].resources.shift();
@@ -349,7 +351,9 @@ test('guest can replace a seat removed by an operator after review', async ({ pa
   await page.getByRole('button', { name: 'Confirm reservation' }).click();
   await expect(page.getByRole('alert')).toContainText('Resource not found');
   await page.getByRole('button', { name: 'Change place' }).click();
-  await page.getByRole('combobox', { name: 'Resource', exact: true }).selectOption({ label: 'A2' });
+  await page
+    .getByRole('combobox', { name: 'Resource', exact: true })
+    .selectOption({ label: 'Row A · Seat 2' });
   await expect(page.getByRole('button', { name: 'Review reservation' })).toBeEnabled();
 });
 
@@ -568,7 +572,7 @@ test('stadium block numbers persist and keyboard focus stays close to the seat',
   await page.getByRole('button', { name: 'Select North A2', exact: true }).click();
   await page.getByRole('button', { name: '3D view' }).click();
   await expect(resourceInput).toHaveValue(venue.layout.floors[0].resources[1].id);
-  await expect(page.locator('.selection-card strong')).toContainText('North A2');
+  await expect(page.locator('.selection-card strong')).toContainText('Row A · Seat 2');
   await page.getByRole('button', { name: 'Remove North A2', exact: true }).click();
   await expect(resourceInput).toHaveValue('');
   const saved = (await (await request.get('/api/venues')).json()).find(
@@ -788,4 +792,78 @@ test('generated scenes are previewed before applying and saved only on explicit 
   );
   expect(savedAfter.layout.floors[0].name).toBe('AI dining room');
   expect(savedAfter.layout.floors[0].resources).toHaveLength(12);
+});
+
+test('operator prices a row and blocks and releases it for one event', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
+  test.setTimeout(60000);
+  const name = `Row controls ${Date.now()}`;
+  const venue = await (
+    await request.post('/api/venues', { data: { name, kind: 'stadium' } })
+  ).json();
+  const show = await (
+    await request.post(`/api/venues/${venue.id}/shows`, {
+      data: {
+        title: 'Row control match',
+        start: new Date(Date.now() + 86400000).toISOString(),
+        end: new Date(Date.now() + 93600000).toISOString(),
+      },
+    })
+  ).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
+  await page.getByLabel('Password').fill('integration-password-123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
+  await page.getByRole('button', { name: 'Select North A1', exact: true }).click();
+  await expect(page.getByLabel('Row label', { exact: true })).toHaveValue('A');
+  await expect(page.getByLabel('Seat number', { exact: true })).toHaveValue('1');
+  await page.getByLabel('Reservation price', { exact: true }).fill('35');
+  await page.getByRole('button', { name: 'Apply price to this row' }).click();
+  await page.getByRole('button', { name: 'Save layout', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Layout saved');
+  const saved = (await (await request.get('/api/venues')).json()).find(
+    (v: any) => v.id === venue.id,
+  );
+  expect(
+    saved.layout.floors[0].resources
+      .filter((r: any) => r.section === '60' && r.row === 'A')
+      .map((r: any) => r.price),
+  ).toEqual(Array(6).fill(3500));
+  await page.getByRole('button', { name: 'Manage event seats', exact: true }).click();
+  await page.getByLabel('Selection scope').selectOption('row');
+  await page.getByRole('button', { name: 'Select North A1', exact: true }).click();
+  await expect(page.getByText('6 seats selected', { exact: true })).toBeVisible();
+  await page.getByLabel('Reason for blocking').fill('Camera platform');
+  await page.getByRole('button', { name: 'Block selected seats', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('6 seats blocked');
+  expect(
+    await (await request.get(`/api/venues/${venue.id}/shows/${show.id}/blocks`)).json(),
+  ).toHaveLength(6);
+  await page.screenshot({ path: '/tmp/openvenue-seating-blocks-2d.png', fullPage: true });
+  await page.getByRole('button', { name: '3D view', exact: true }).click();
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: '/tmp/openvenue-seating-blocks-3d.png', fullPage: true });
+  await page.getByRole('button', { name: 'Release selected seats', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('6 seats released');
+  expect(
+    await (await request.get(`/api/venues/${venue.id}/shows/${show.id}/blocks`)).json(),
+  ).toHaveLength(0);
+  await request.post(`/api/venues/${venue.id}/shows/${show.id}/blocks`, {
+    data: { resourceIds: [venue.layout.floors[0].resources[0].id], reason: 'Another operator' },
+  });
+  await expect(
+    page.getByRole('button', { name: 'Release selected seats', exact: true }),
+  ).toBeEnabled({ timeout: 20000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByLabel('Reason for blocking')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: '/tmp/openvenue-seating-mobile.png', fullPage: true });
 });

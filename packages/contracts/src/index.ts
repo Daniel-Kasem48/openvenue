@@ -13,6 +13,14 @@ export const resourceSchema = z.object({
   id: uuid,
   label: name,
   section: z.string().trim().max(40).default(''),
+  row: z
+    .string()
+    .trim()
+    .max(12)
+    .regex(/^[A-Za-z0-9-]*$/)
+    .toUpperCase()
+    .optional(),
+  seatNumber: z.number().int().min(1).max(10000).optional(),
   kind: z.enum(['table', 'space', 'seat']),
   x: z.number().min(0).max(200),
   y: z.number().min(0).max(200),
@@ -78,6 +86,19 @@ export const layoutSchema = z
         if (ids.has(id)) ctx.addIssue({ code: 'custom', message: 'Identifiers must be unique' });
         ids.add(id);
       }
+      const addresses = new Set<string>();
+      for (const r of floor.resources) {
+        if (r.kind !== 'seat') continue;
+        const { row, seatNumber } = seatIdentity(r);
+        if (!row || seatNumber === undefined) continue;
+        const address = JSON.stringify([seatSection(r), row, seatNumber]);
+        if (addresses.has(address))
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Seat numbers must be unique within each block and row',
+          });
+        addresses.add(address);
+      }
       for (const r of [...floor.resources, ...floor.objects]) {
         const angle = (r.rotation * Math.PI) / 180;
         const extentX =
@@ -111,6 +132,7 @@ export type Booking = {
   currency: z.infer<typeof currencySchema>;
   venueName?: string;
   resourceLabel?: string;
+  seatLocation?: string;
 };
 export const createVenueSchema = z.object({
   name,
@@ -159,4 +181,63 @@ export function reservationPrice(layout: Layout, resource: Resource): number {
 }
 export function formatPrice(amount: number, currency: string): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount / 100);
+}
+
+export function seatIdentity(resource: Resource) {
+  const legacy = resource.kind === 'seat' ? resource.label.match(/(?:^|\s)([A-Z]+)(\d+)$/) : null;
+  return {
+    row: resource.row ?? legacy?.[1] ?? '',
+    seatNumber: resource.seatNumber ?? (legacy ? Number(legacy[2]) : undefined),
+  };
+}
+export function seatSection(resource: Resource): string {
+  return (
+    resource.section ||
+    (resource.kind === 'seat' ? (resource.label.match(/^(.*?)\s+[A-Z]+\d+$/)?.[1] ?? '') : '')
+  );
+}
+export function seatLocation(resource: Resource): string {
+  if (resource.kind !== 'seat') return resource.label;
+  const { row, seatNumber } = seatIdentity(resource);
+  return [
+    resource.section ? `Block ${resource.section}` : seatSection(resource),
+    row && `Row ${row}`,
+    seatNumber !== undefined && `Seat ${seatNumber}`,
+    !row && seatNumber === undefined && resource.label,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+export function seatRows(floor: Floor) {
+  const groups = new Map<
+    string,
+    { section: string; row: string; seats: Resource[]; x: number; y: number; elevation: number }
+  >();
+  for (const seat of floor.resources) {
+    const { row } = seatIdentity(seat);
+    if (seat.kind !== 'seat' || !row) continue;
+    const key = JSON.stringify([seatSection(seat), row]);
+    if (!groups.has(key))
+      groups.set(key, {
+        section: seatSection(seat),
+        row,
+        seats: [],
+        x: 0,
+        y: 0,
+        elevation: seat.elevation,
+      });
+    groups.get(key)!.seats.push(seat);
+  }
+  for (const group of groups.values()) {
+    group.seats.sort(
+      (a, b) => (seatIdentity(a).seatNumber ?? 0) - (seatIdentity(b).seatNumber ?? 0),
+    );
+    const [first, second] = group.seats;
+    const dx = second ? second.x - first.x : 1,
+      dy = second ? second.y - first.y : 0;
+    const length = Math.hypot(dx, dy) || 1;
+    group.x = first.x - (dx / length) * 1.1;
+    group.y = first.y - (dy / length) * 1.1;
+  }
+  return [...groups.values()];
 }

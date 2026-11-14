@@ -1,3 +1,4 @@
+import { seatRows, seatLocation, seatIdentity } from '@openvenue/contracts';
 import { Object2D } from './scene/Object2D';
 import { useRef, useState } from 'react';
 import type { Floor, Resource, SceneObject, VenueKind } from '@openvenue/contracts';
@@ -7,6 +8,7 @@ type Props = {
   selected?: string;
   selectedIds?: string[];
   busy: string[];
+  blocked?: string[];
   editing: boolean;
   onSelect: (id: string) => void;
   onMove: (id: string, x: number, y: number) => void;
@@ -17,6 +19,7 @@ export default function Map2D({
   selected,
   selectedIds = [],
   busy,
+  blocked = [],
   editing,
   onSelect,
   onMove,
@@ -150,7 +153,12 @@ export default function Map2D({
         {floor.resources.map((r) => {
           const unavailable = busy.includes(r.id),
             active = selected === r.id || selectedIds.includes(r.id);
-          const seatLabel = r.label.match(/[A-Z]+\d+$/)?.[0] ?? r.label;
+          const identity = seatIdentity(r);
+          const seatLabel =
+            identity.row && identity.seatNumber !== undefined
+              ? `${identity.row}${identity.seatNumber}`
+              : r.label;
+          const isBlocked = blocked.includes(r.id);
           return (
             <g
               key={r.id}
@@ -158,6 +166,7 @@ export default function Map2D({
               tabIndex={0}
               aria-label={`Select ${r.label}`}
               aria-pressed={active}
+              aria-description={`${seatLocation(r)}${isBlocked ? ' · Blocked for this event' : unavailable ? ' · Reserved' : ''}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -169,10 +178,7 @@ export default function Map2D({
               className="map-resource"
               style={{ cursor: editing ? 'grab' : 'pointer' }}
             >
-              <title>
-                {r.section ? `Block ${r.section} · ` : ''}
-                {r.label}
-              </title>
+              <title>{`${seatLocation(r)}${isBlocked ? ' · Blocked for this event' : unavailable ? ' · Reserved' : ''}`}</title>
               <rect
                 className="resource-focus-ring"
                 x={-r.width / 2 - 0.06}
@@ -213,7 +219,9 @@ export default function Map2D({
                   width={r.width}
                   height={r.depth}
                   rx={r.kind === 'space' ? 0.08 : 0.22}
-                  fill={active ? '#d9ecae' : unavailable ? '#eee0d5' : '#e0e9dd'}
+                  fill={
+                    active ? '#d9ecae' : isBlocked ? '#c6cbd1' : unavailable ? '#eee0d5' : '#e0e9dd'
+                  }
                   stroke={active ? '#35543a' : unavailable ? '#bb9d85' : '#94ac91'}
                   strokeWidth={active ? 0.1 : 0.05}
                 />
@@ -263,6 +271,19 @@ export default function Map2D({
             </g>
           );
         })}
+        {seatRows(floor).map((row) => (
+          <g
+            key={JSON.stringify([row.section, row.row])}
+            transform={`translate(${row.x} ${row.y})`}
+            pointerEvents="none"
+            aria-label={`Row ${row.row}${row.section ? ` · Block ${row.section}` : ''}`}
+          >
+            <rect x="-.45" y="-.35" width=".9" height=".7" rx=".12" fill="#244c3c" />
+            <text textAnchor="middle" dominantBaseline="middle" fontSize=".45" fill="white">
+              {row.row}
+            </text>
+          </g>
+        ))}
         {(floor.objects ?? [])
           .filter((o) => o.kind === 'label')
           .map((o) => (

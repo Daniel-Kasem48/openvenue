@@ -35,6 +35,16 @@ In **Edit layout → Reservation pricing**, choose free, one standard price, or 
 
 Restaurant guests choose party size and a table with enough capacity. Cinema/stadium guests choose a seat count and toggle that many seats. If any seat conflicts, the entire checkout rolls back. Each seat can subsequently be cancelled individually by the administrator.
 
+## Seat rows and event blocks
+
+Stadium seats have explicit row letters and seat numbers. Row A starts nearest the pitch in the template; tickets and booking summaries identify the block, row and seat. Existing layouts retain their labels and derive row/seat information from names such as `North A1`. New confirmed reservations save the seat location as well as its price, so later layout edits do not rewrite those details.
+
+In **Edit layout**, select a seat to edit its row and seat number. With individual pricing enabled, **Apply price to this row** updates seats in the same block and row on that floor. Save the layout to publish prices; existing reservations keep their original amounts. This changes venue pricing, not a single event's pricing.
+
+For an upcoming event, choose **Manage event seats**. Select individual seats, an entire row within a block, or a whole block on either map. Enter a staff-only reason and choose **Block selected seats**. Guests see those seats as unavailable, with no access to the reason. **Release selected seats** returns blocked seats to availability. Blocks apply only to the chosen event and do not create fake customer bookings. If any selected seat is already booked, the entire block request is rejected. Booking and blocking share the venue transaction lock so only one can succeed in a race. Blocks are manual; there are no automatic temporary holds or payment collection.
+
+Blocks on ended events do not prevent removing an otherwise unused seat. Reservation history still protects seats from deletion.
+
 ## Quick start with Docker
 
 Requires Docker Compose. From this repository:

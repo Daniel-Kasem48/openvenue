@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   currencySchema,
+  seatIdentity,
+  seatSection,
   makeObject,
   objectKinds,
   type SceneObject,
@@ -204,6 +206,60 @@ export function LayoutInspector({
                 }
               />
             </label>
+          )}
+          {resource.kind === 'seat' && (
+            <>
+              <div className="field-grid">
+                <label>
+                  Row label
+                  <input
+                    maxLength={12}
+                    value={seatIdentity(resource).row}
+                    onChange={(e) => updateResource({ row: e.target.value.toUpperCase() })}
+                  />
+                </label>
+                <label>
+                  Seat number
+                  <input
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={seatIdentity(resource).seatNumber ?? ''}
+                    onChange={(e) =>
+                      updateResource({
+                        seatNumber: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              {draft.layout.pricing.mode === 'per-resource' && seatIdentity(resource).row && (
+                <button
+                  className="secondary full"
+                  onClick={() =>
+                    updateLayout({
+                      ...draft.layout,
+                      floors: draft.layout.floors.map((f, i) =>
+                        i === floorIndex
+                          ? {
+                              ...f,
+                              resources: f.resources.map((r) =>
+                                r.kind === 'seat' &&
+                                seatSection(r) === seatSection(resource) &&
+                                seatIdentity(r).row === seatIdentity(resource).row
+                                  ? { ...r, price: resource.price }
+                                  : r,
+                              ),
+                            }
+                          : f,
+                      ),
+                    })
+                  }
+                >
+                  Apply price to this row
+                </button>
+              )}
+            </>
           )}
           {resource.kind === 'seat' && (
             <label>

@@ -93,3 +93,53 @@ it('seeds editable stadium block labels matching every seat section', () => {
   );
   expect(layoutSchema.safeParse(layout).success).toBe(true);
 });
+
+it('identifies legacy seats and provides explicit block, row and seat locations', async () => {
+  const { seatLocation, seatIdentity, seatRows } = await import('@openvenue/contracts');
+  const floor = makeTemplate('stadium').floors[0];
+  const seat = floor.resources[0];
+  expect(seat.row).toBe('A');
+  expect(seat.seatNumber).toBe(1);
+  expect(seatLocation(seat)).toBe('Block 60 · Row A · Seat 1');
+  const legacy = { ...seat, row: undefined, seatNumber: undefined, label: 'North B12' };
+  expect(seatIdentity(legacy)).toEqual({ row: 'B', seatNumber: 12 });
+  expect(seatLocation({ ...legacy, label: 'Custom seat' })).toBe('Block 60 · Custom seat');
+  const rows = seatRows(floor);
+  expect(rows.find((r) => r.section === '60' && r.row === 'A')!.seats).toHaveLength(6);
+  const locations = floor.resources.map(seatLocation);
+  expect(new Set(locations).size).toBe(locations.length);
+});
+
+it('keeps legacy unnumbered stands separate and rejects duplicate explicit seat addresses', async () => {
+  const { seatRows, seatLocation } = await import('@openvenue/contracts');
+  const layout = makeTemplate('stadium'),
+    floor = layout.floors[0];
+  const a = {
+    ...floor.resources[0],
+    section: '',
+    row: undefined,
+    seatNumber: undefined,
+    label: 'North A1',
+  };
+  const b = {
+    ...floor.resources[1],
+    section: '',
+    row: undefined,
+    seatNumber: undefined,
+    label: 'South A1',
+  };
+  expect(seatRows({ ...floor, resources: [a, b] })).toHaveLength(2);
+  expect(seatLocation(a)).toContain('North');
+  floor.resources[1].seatNumber = floor.resources[0].seatNumber;
+  expect(layoutSchema.safeParse(layout).success).toBe(false);
+});
+
+it('rejects a new explicit address that collides with an untouched legacy seat', () => {
+  const layout = makeTemplate('stadium');
+  const seats = layout.floors[0].resources;
+  delete seats[0].row;
+  delete seats[0].seatNumber;
+  seats[1].row = 'A';
+  seats[1].seatNumber = 1;
+  expect(layoutSchema.safeParse(layout).success).toBe(false);
+});

@@ -11,6 +11,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 import {
   layoutSchema,
+  seatLocation,
   reservationPrice,
   bookingSchema,
   cloneLayout,
@@ -28,7 +29,7 @@ Module({})(RootModule);
 const fail = (status: number, message: string): never => {
   throw Object.assign(new Error(message), { status });
 };
-const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "resourceId", b.guest_name AS "guestName", b.starts_at AS start, b.ends_at AS end, b.status, b.party_size AS "partySize", b.price, b.currency`;
+const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "resourceId", b.guest_name AS "guestName", b.starts_at AS start, b.ends_at AS end, b.status, b.party_size AS "partySize", b.price, b.currency, b.seat_location AS "seatLocation"`;
 export async function createApp(config: {
   databaseUrl: string;
   adminPassword: string;
@@ -229,13 +230,93 @@ export async function createApp(config: {
     ).rows[0];
     res.status(201).json(row);
   });
+  const blockSeatsSchema = z.object({
+    resourceIds: z
+      .array(z.uuid().transform((id) => id.toLowerCase()))
+      .min(1)
+      .max(1000)
+      .refine((ids) => new Set(ids).size === ids.length, 'Choose each seat only once'),
+    reason: z.string().trim().min(1).max(240),
+  });
+  router.get('/venues/:id/shows/:showId/blocks', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id),
+      showId = z.uuid().parse(req.params.showId);
+    res.json(
+      (
+        await pool.query(
+          `SELECT b.resource_id AS "resourceId",b.reason FROM event_seat_blocks b JOIN shows s ON s.id=b.show_id WHERE s.venue_id=$1 AND s.id=$2`,
+          [venueId, showId],
+        )
+      ).rows,
+    );
+  });
+  router.post('/venues/:id/shows/:showId/blocks', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id),
+      showId = z.uuid().parse(req.params.showId);
+    const body = blockSeatsSchema.parse(req.body);
+    await transaction(pool, async (client) => {
+      const venue = (
+        await client.query('SELECT layout FROM venues WHERE id=$1 FOR UPDATE', [venueId])
+      ).rows[0];
+      if (!venue) fail(404, 'Venue not found');
+      const show = (
+        await client.query('SELECT * FROM shows WHERE id=$1 AND venue_id=$2', [showId, venueId])
+      ).rows[0];
+      if (!show) fail(404, 'Event not found');
+      if (new Date(show.ends_at).getTime() <= Date.now()) fail(400, 'This event has ended');
+      const seats = layoutSchema
+        .parse(venue.layout)
+        .floors.flatMap((f) => f.resources)
+        .filter((r) => r.kind === 'seat');
+      if (body.resourceIds.some((id) => !seats.some((r) => r.id === id)))
+        fail(400, 'Choose seats from this venue');
+      const booked = await client.query(
+        "SELECT id FROM bookings WHERE resource_id=ANY($1::uuid[]) AND status='confirmed' AND starts_at<$3 AND ends_at>$2",
+        [body.resourceIds, show.starts_at, show.ends_at],
+      );
+      if (booked.rowCount)
+        fail(409, 'Some selected seats are already booked. No seats were blocked.');
+      await client.query(
+        `INSERT INTO event_seat_blocks(show_id,resource_id,reason) SELECT $1,unnest($2::uuid[]),$3 ON CONFLICT(show_id,resource_id) DO UPDATE SET reason=EXCLUDED.reason`,
+        [showId, body.resourceIds, body.reason],
+      );
+    });
+    res.status(201).json({ blocked: body.resourceIds });
+  });
+  router.delete('/venues/:id/shows/:showId/blocks', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id),
+      showId = z.uuid().parse(req.params.showId);
+    const { resourceIds } = blockSeatsSchema.omit({ reason: true }).parse(req.body);
+    await transaction(pool, async (client) => {
+      await client.query('SELECT id FROM venues WHERE id=$1 FOR UPDATE', [venueId]);
+      const show = await client.query('SELECT id FROM shows WHERE id=$1 AND venue_id=$2', [
+        showId,
+        venueId,
+      ]);
+      if (!show.rowCount) fail(404, 'Event not found');
+      await client.query(
+        'DELETE FROM event_seat_blocks WHERE show_id=$1 AND resource_id=ANY($2::uuid[])',
+        [showId, resourceIds],
+      );
+    });
+    res.json({ released: resourceIds });
+  });
   router.get('/venues/:id/availability', async (req, res) => {
     const times = intervalSchema.parse(req.query);
     const rows = await pool.query(
       "SELECT resource_id FROM bookings WHERE venue_id=$1 AND status='confirmed' AND starts_at<$3 AND ends_at>$2",
       [req.params.id, times.start, times.end],
     );
-    res.json({ busy: rows.rows.map((r) => r.resource_id) });
+    const showId = z.uuid().optional().parse(req.query.showId);
+    const blocked = await pool.query(
+      `SELECT b.resource_id FROM event_seat_blocks b JOIN shows s ON s.id=b.show_id WHERE s.venue_id=$1 AND ($4::uuid IS NULL OR s.id=$4) AND s.starts_at<$3 AND s.ends_at>$2`,
+      [req.params.id, times.start, times.end, showId ?? null],
+    );
+    const blockedIds = blocked.rows.map((r) => r.resource_id);
+    res.json({
+      busy: [...new Set([...rows.rows.map((r) => r.resource_id), ...blockedIds])],
+      blocked: blockedIds,
+    });
   });
   router.post(
     '/bookings',
@@ -283,6 +364,16 @@ export async function createApp(config: {
           if (venue.kind === 'restaurant' && resource.capacity < body.partySize)
             fail(400, 'Your party exceeds this table’s capacity');
         }
+        if (
+          body.showId &&
+          (
+            await client.query(
+              'SELECT resource_id FROM event_seat_blocks WHERE show_id=$1 AND resource_id=ANY($2::uuid[])',
+              [body.showId, ids],
+            )
+          ).rowCount
+        )
+          fail(409, 'Some selected seats are blocked for this event. Choose other seats.');
         const total = ids.reduce(
           (sum, id) =>
             sum +
@@ -302,7 +393,7 @@ export async function createApp(config: {
           bookings.push(
             (
               await client.query(
-                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${bookingColumns}`,
+                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency,seat_location) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING ${bookingColumns}`,
                 [
                   randomUUID(),
                   body.venueId,
@@ -317,6 +408,7 @@ export async function createApp(config: {
                     resources.find((r) => r.id === id)!,
                   ),
                   layout.pricing.currency,
+                  seatLocation(resources.find((r) => r.id === id)!),
                 ],
               )
             ).rows[0],
@@ -364,7 +456,7 @@ export async function createApp(config: {
       error.code === '23P01'
         ? 'That resource was just reserved. Choose another time or place.'
         : error.code === '23503'
-          ? 'Cannot remove a resource with reservation history.'
+          ? 'Cannot remove a resource with reservation history or event blocks.'
           : error instanceof SceneGenerationError
             ? error.message
             : status >= 500

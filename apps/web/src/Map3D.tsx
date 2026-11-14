@@ -3,6 +3,8 @@ import type { TransformControls as TransformControlsImpl } from 'three-stdlib';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Bounds, OrbitControls, useBounds, useCursor, TransformControls } from '@react-three/drei';
+import { seatRows } from '@openvenue/contracts';
+import { SceneLabel } from './scene/SceneLabel';
 import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
 import { CinemaChair, DiningTable, ParkingBay } from './scene/Models';
 import { StadiumSeats } from './scene/StadiumSeats';
@@ -38,29 +40,33 @@ function ResourceModel({
   floor,
   selected,
   reserved,
+  blocked,
   onSelect,
 }: {
   resource: Resource;
   floor: Floor;
   selected: boolean;
   reserved: boolean;
+  blocked: boolean;
   onSelect: (id: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   useCursor(hovered);
   const color = selected
     ? '#a6bc65'
-    : reserved
-      ? '#b48675'
-      : r.kind === 'seat'
-        ? r.color
-        : r.kind === 'space'
-          ? r.ev
-            ? '#5d9e86'
-            : r.accessible
-              ? '#5b8caa'
-              : '#a6ada5'
-          : '#4c7167';
+    : blocked
+      ? '#8c96a3'
+      : reserved
+        ? '#b48675'
+        : r.kind === 'seat'
+          ? r.color
+          : r.kind === 'space'
+            ? r.ev
+              ? '#5d9e86'
+              : r.accessible
+                ? '#5b8caa'
+                : '#a6ada5'
+            : '#4c7167';
   return (
     <group
       position={[r.x - floor.width / 2, r.elevation ?? 0, r.y - floor.depth / 2]}
@@ -149,6 +155,7 @@ export default function Map3D({
   selected,
   selectedIds = [],
   busy,
+  blocked = [],
   onSelect,
   editing = false,
   onMove,
@@ -158,6 +165,7 @@ export default function Map3D({
   selected?: string;
   selectedIds?: string[];
   busy: string[];
+  blocked?: string[];
   onSelect: (id: string) => void;
   editing?: boolean;
   onMove?: (id: string, x: number, y: number) => { x: number; y: number } | undefined;
@@ -268,11 +276,33 @@ export default function Map3D({
                   </group>
                 ))}
               </group>
+              {seatRows(floor).map((row) => (
+                <group
+                  key={JSON.stringify([row.section, row.row])}
+                  position={[row.x - floor.width / 2, 0, row.y - floor.depth / 2]}
+                >
+                  <SceneLabel
+                    object={{
+                      id: `row-${row.section}-${row.row}`,
+                      kind: 'label',
+                      label: row.row,
+                      x: 0,
+                      y: 0,
+                      rotation: 0,
+                      width: 1.1,
+                      depth: 0.7,
+                      height: row.elevation + 1,
+                      color: '#244c3c',
+                    }}
+                  />
+                </group>
+              ))}
               {kind === 'stadium' ? (
                 <StadiumSeats
                   floor={floor}
                   selected={selected ? [...selectedIds, selected] : selectedIds}
                   busy={busy}
+                  blocked={blocked}
                   onSelect={onSelect}
                 />
               ) : (
@@ -283,6 +313,7 @@ export default function Map3D({
                     floor={floor}
                     selected={selected === r.id || selectedIds.includes(r.id)}
                     reserved={busy.includes(r.id)}
+                    blocked={blocked.includes(r.id)}
                     onSelect={onSelect}
                   />
                 ))

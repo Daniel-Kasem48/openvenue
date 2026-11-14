@@ -12,6 +12,12 @@ export async function syncResources(client: PoolClient, venueId: string, layout:
   );
   if (foreign.rowCount)
     throw Object.assign(new Error('Resource identifiers belong to another venue'), { status: 409 });
+  await client.query(
+    `DELETE FROM event_seat_blocks b USING shows s, resources r
+     WHERE b.show_id=s.id AND b.resource_id=r.id AND r.venue_id=$1
+       AND NOT (r.id=ANY($2::uuid[])) AND s.ends_at<=now()`,
+    [venueId, ids],
+  );
   await client.query('DELETE FROM resources WHERE venue_id=$1 AND NOT (id=ANY($2::uuid[]))', [
     venueId,
     ids,
@@ -54,11 +60,16 @@ export async function initialize(pool: Pool) {
     new URL('../migrations/002_party_size.sql', import.meta.url),
     'utf8',
   );
+  const blocksSql = await readFile(
+    new URL('../migrations/004_event_seat_blocks.sql', import.meta.url),
+    'utf8',
+  );
   await transaction(pool, async (client) => {
     await client.query('SELECT pg_advisory_xact_lock(745921)');
     await client.query(sql);
     await client.query(partySizeSql);
     await client.query(pricingSql);
+    await client.query(blocksSql);
     if ((await client.query('SELECT id FROM venues LIMIT 1')).rowCount) return;
     for (const [kind, name] of [
       ['restaurant', 'The Greenhouse'],

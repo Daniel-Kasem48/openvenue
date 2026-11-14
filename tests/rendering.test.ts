@@ -73,3 +73,22 @@ it('shows block numbers and compact seat labels with a tight keyboard focus mark
   expect(markup).toContain('class="resource-focus-ring"');
   expect(markup).toContain('vector-effect="non-scaling-stroke"');
 });
+
+it('renders row letters and distinguishes blocked seats from bookings', () => {
+  const floor = makeTemplate('stadium').floors[0];
+  const markup = renderToStaticMarkup(
+    createElement(Map2D, {
+      floor,
+      kind: 'stadium',
+      busy: [floor.resources[0].id],
+      blocked: [floor.resources[0].id],
+      editing: false,
+      onSelect: () => {},
+      onMove: () => {},
+    }),
+  );
+  expect(markup).toContain('Row A · Block 60');
+  expect(markup).toContain('Block 60 · Row A · Seat 1');
+  expect(markup).toContain('Blocked for this event');
+  expect(markup).toContain('#c6cbd1');
+});

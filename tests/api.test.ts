@@ -379,3 +379,131 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     ).toEqual([]);
   });
 });
+
+describe.skipIf(!databaseUrl)('event seat blocks', () => {
+  let app: INestApplication, base: string, cookie: string, venue: any, show: any, other: any;
+  const call = (path: string, data?: unknown, admin = true, method = data ? 'POST' : 'GET') =>
+    fetch(base + '/api' + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(admin ? { cookie } : {}) },
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  beforeAll(async () => {
+    app = await createApp({
+      databaseUrl: databaseUrl!,
+      adminPassword: 'integration-password-123',
+      secureCookies: false,
+    });
+    await app.listen(0, '127.0.0.1');
+    base = await app.getUrl();
+    const login = await call('/auth/login', { password: 'integration-password-123' }, false);
+    cookie = login.headers.get('set-cookie')!.split(';')[0];
+    venue = await (await call('/venues', { name: 'Event blocks', kind: 'stadium' })).json();
+    show = await (
+      await call(`/venues/${venue.id}/shows`, {
+        title: 'Match one',
+        start: '2091-01-01T12:00:00Z',
+        end: '2091-01-01T14:00:00Z',
+      })
+    ).json();
+    other = await (
+      await call(`/venues/${venue.id}/shows`, {
+        title: 'Match two',
+        start: '2091-01-02T12:00:00Z',
+        end: '2091-01-02T14:00:00Z',
+      })
+    ).json();
+  });
+  afterAll(async () => {
+    await app?.close();
+  });
+  const book = (seat: any, event: any = show) => ({
+    venueId: venue.id,
+    resourceId: seat.id,
+    guestName: 'Test guest',
+    showId: event.id,
+    expectedTotal: seat.price,
+    expectedCurrency: 'USD',
+  });
+  it('blocks only the selected event, keeps reasons private, rejects booking and releases seats', async () => {
+    const seat = venue.layout.floors[0].resources[0],
+      path = `/venues/${venue.id}/shows/${show.id}/blocks`,
+      body = { resourceIds: [seat.id], reason: 'Camera platform' };
+    expect((await call(path, body, false)).status).toBe(401);
+    expect((await call(path, body)).status).toBe(201);
+    const query = new URLSearchParams({ start: show.start, end: show.end, showId: show.id });
+    const available = await (
+      await call(`/venues/${venue.id}/availability?${query}`, undefined, false)
+    ).json();
+    expect(available.blocked).toContain(seat.id);
+    expect(JSON.stringify(available)).not.toContain('Camera platform');
+    expect((await call('/bookings', book(seat), false)).status).toBe(409);
+    expect((await call('/bookings', book(seat, other), false)).status).toBe(201);
+    expect((await (await call(path)).json())[0].reason).toBe('Camera platform');
+    expect((await call(path, { resourceIds: [seat.id] }, true, 'DELETE')).status).toBe(200);
+    expect((await call('/bookings', book(seat), false)).status).toBe(201);
+    expect((await call(path, body)).status).toBe(409);
+  });
+  it('rejects foreign seats and applies a block batch atomically', async () => {
+    const seats = venue.layout.floors[0].resources;
+    const path = `/venues/${venue.id}/shows/${show.id}/blocks`;
+    expect(
+      (await call(path, { resourceIds: [seats[2].id, crypto.randomUUID()], reason: 'Maintenance' }))
+        .status,
+    ).toBe(400);
+    expect(await (await call(path)).json()).toHaveLength(0);
+    expect(
+      (await call(path, { resourceIds: [seats[2].id, seats[2].id], reason: 'Maintenance' })).status,
+    ).toBe(400);
+  });
+  it('allows removing a never-booked seat after its blocked event ends', async () => {
+    const seat = venue.layout.floors[0].resources[5];
+    const event = await (
+      await call(`/venues/${venue.id}/shows`, {
+        title: 'Temporary closure',
+        start: '2092-01-01T12:00:00Z',
+        end: '2092-01-01T14:00:00Z',
+      })
+    ).json();
+    expect(
+      (
+        await call(`/venues/${venue.id}/shows/${event.id}/blocks`, {
+          resourceIds: [seat.id],
+          reason: 'Camera',
+        })
+      ).status,
+    ).toBe(201);
+    const pool = new Pool({ connectionString: databaseUrl });
+    try {
+      await pool.query(
+        "UPDATE shows SET starts_at='2020-01-01T12:00:00Z',ends_at='2020-01-01T14:00:00Z' WHERE id=$1",
+        [event.id],
+      );
+    } finally {
+      await pool.end();
+    }
+    const layout = structuredClone(venue.layout);
+    layout.floors[0].resources = layout.floors[0].resources.filter((r: any) => r.id !== seat.id);
+    expect(
+      (
+        await call(
+          `/venues/${venue.id}`,
+          { name: venue.name, layout, revision: venue.revision },
+          true,
+          'PUT',
+        )
+      ).status,
+    ).toBe(200);
+  });
+  it('serializes a booking racing a block so exactly one succeeds', async () => {
+    const seat = venue.layout.floors[0].resources[3];
+    const responses = await Promise.all([
+      call('/bookings', book(seat), false),
+      call(`/venues/${venue.id}/shows/${show.id}/blocks`, {
+        resourceIds: [seat.id],
+        reason: 'Staff allocation',
+      }),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+  });
+});

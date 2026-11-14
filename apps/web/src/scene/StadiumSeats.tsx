@@ -14,11 +14,13 @@ export function StadiumSeats({
   floor,
   selected,
   busy,
+  blocked = [],
   onSelect,
 }: {
   floor: Floor;
   selected: string[];
   busy: string[];
+  blocked?: string[];
   onSelect: (id: string) => void;
 }) {
   const seat = useRef<InstancedMesh>(null),
@@ -31,6 +33,7 @@ export function StadiumSeats({
       point = new Vector3(),
       scale = new Vector3(),
       color = new Color();
+    const blockedSet = new Set(blocked);
     const selectedSet = new Set(selected),
       reserved = new Set(busy);
     for (const [i, r] of floor.resources.entries()) {
@@ -53,9 +56,11 @@ export function StadiumSeats({
                 ? '#343c3c'
                 : selectedSet.has(r.id)
                   ? '#a6bc65'
-                  : reserved.has(r.id)
-                    ? '#b48675'
-                    : r.color,
+                  : blockedSet.has(r.id)
+                    ? '#8c96a3'
+                    : reserved.has(r.id)
+                      ? '#b48675'
+                      : r.color,
           ),
         );
       }
@@ -67,7 +72,7 @@ export function StadiumSeats({
         mesh.computeBoundingSphere();
         mesh.computeBoundingBox();
       }
-  }, [floor, selected, busy]);
+  }, [floor, selected, busy, blocked]);
   return (
     <group>
       {[seat, back, base, support].map((ref, i) => (

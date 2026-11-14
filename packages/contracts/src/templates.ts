@@ -113,6 +113,8 @@ export function makeTemplate(kind: VenueKind): Layout {
               ],
             rotation: [180, 0, 270, 90][side],
             elevation,
+            row: String.fromCharCode(65 + row),
+            seatNumber: (col % Math.ceil(columns / 3)) + 1,
             color: side === 1 || row % 4 !== 2 ? '#e6c52c' : '#343c3c',
             price: side < 2 ? 4500 - Math.min(row, 10) * 150 : 7000 - Math.min(row, 10) * 250,
             accessible: row === 0 && col === 0,

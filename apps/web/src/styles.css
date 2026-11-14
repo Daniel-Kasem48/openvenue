@@ -1535,3 +1535,20 @@ dialog select {
 .panel-actions {
   flex-wrap: wrap;
 }
+
+.event-seat-controls .full {
+  margin: 8px 0;
+}
+.managed-seat-list {
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 10px 0;
+}
+.managed-seat-list p {
+  margin-bottom: 8px;
+}
+.legend .blocked {
+  background: #8c96a3;
+}
