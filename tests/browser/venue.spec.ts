@@ -1,5 +1,5 @@
 import { makeTemplate } from '@openvenue/contracts';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 test('operator creates a template, edits a map and manages a reservation', async ({ page }) => {
   const venueName = `Browser restaurant ${Date.now()}`;
   await page.goto('/');
@@ -472,6 +472,8 @@ test('selection and review preserve a manually panned and zoomed camera', async 
   await canvas.scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => (window as any).__cameraView?.length)).toBe(16);
   await page.waitForTimeout(600);
+  // Canvas sizing can move its centre after the initial scroll; hover waits and scrolls again.
+  await canvas.hover();
   const initial = await page.evaluate(() => (window as any).__cameraView);
   const box = (await canvas.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
