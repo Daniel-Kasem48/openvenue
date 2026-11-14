@@ -151,11 +151,14 @@ MIT licensed. Contributions welcome; run the checks above before submitting a PR
 ## Generate scenes with Claude
 
 Set `ANTHROPIC_API_KEY` in the server's untracked `.env`. Optionally set
-`ANTHROPIC_MODEL` (default `claude-sonnet-4-6`, which supports structured JSON
+`ANTHROPIC_MODEL` (default `claude-haiku-4-5-20251001`, which supports structured JSON
 outputs). For Docker, apply environment changes with `docker compose up -d app`.
 Never put the key in a `VITE_*` variable or commit it.
 
-Sign in, open a venue, and choose **Generate with Claude**. Describe floor dimensions,
+Sign in, open a venue of the intended category, and choose **Generate with Claude**.
+A short Haiku validation call checks the requested category and explicit floor/place
+counts before generating geometry. Mismatched categories are rejected with guidance
+to open or create the correct venue, without a full generation call. Describe floor dimensions,
 places, aisles, furnishings, and prices. Review the 3D preview, choose **Use this
 layout**, adjust it in the editor, then **Save layout**. Applying a generated scene
 replaces the whole current draft, including every floor; previewing does not save

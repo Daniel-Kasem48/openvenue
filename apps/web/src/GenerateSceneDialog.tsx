@@ -67,6 +67,10 @@ export function GenerateSceneDialog({
             Describe dimensions, seats or tables, aisles, furnishings, and optional prices. Review
             the result before using it.
           </p>
+          <p className="muted">
+            Current venue type: <strong>{kind}</strong>. The description is checked before
+            generating a layout.
+          </p>
           <label>
             Describe your scene
             <textarea
@@ -99,7 +103,10 @@ export function GenerateSceneDialog({
             </p>
           )}
           {busy && (
-            <p role="status">Claude is designing your scene. This may take up to 90 seconds…</p>
+            <p role="status">
+              Claude is checking your description and designing the scene. This may take up to 90
+              seconds…
+            </p>
           )}
           <button className="primary full" disabled={busy}>
             {busy ? 'Generating…' : 'Generate preview'}

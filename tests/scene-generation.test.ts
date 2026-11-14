@@ -4,6 +4,7 @@ import { expandBlueprint, generateScene } from '../apps/api/src/scene-generation
 function blueprint() {
   const { id: _id, kind: _kind, ...seat } = makeTemplate('cinema').floors[0].resources[0];
   return {
+    kind: 'cinema',
     summary: 'Three rising rows with four seats each.',
     pricing: { mode: 'uniform', currency: 'USD', amount: 1500 },
     floors: [
@@ -19,6 +20,18 @@ function blueprint() {
     ],
   };
 }
+const response = (value: unknown) =>
+  new Response(
+    JSON.stringify({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: JSON.stringify(value) }],
+    }),
+  );
+const intent = (
+  kind = 'cinema',
+  floors: number | null = null,
+  placesPerFloor: number | null = null,
+) => response({ kind, reason: 'Detected venue type', floors, placesPerFloor });
 afterEach(() => vi.unstubAllGlobals());
 describe('Claude scene generation', () => {
   it('expands repeat groups into independently editable places with unique IDs and rising rows', () => {
@@ -33,7 +46,7 @@ describe('Claude scene generation', () => {
     const data = blueprint();
     data.floors[0].groups[0].rows = 100;
     data.floors[0].groups[0].columns = 100;
-    expect(() => expandBlueprint(data, 'stadium')).toThrow('1,000');
+    expect(() => expandBlueprint(data, 'cinema')).toThrow('1,000');
     data.floors[0].groups[0].rows = 1;
     data.floors[0].groups[0].columns = 1;
     data.floors[0].groups[0].x = 0;
@@ -48,23 +61,28 @@ describe('Claude scene generation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
   it('sends a constrained server-side request and validates its JSON response', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          stop_reason: 'end_turn',
-          content: [{ type: 'text', text: JSON.stringify(blueprint()) }],
-        }),
-      ),
-    );
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(intent())
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify(blueprint()) }],
+          }),
+        ),
+      );
     vi.stubGlobal('fetch', fetch);
     const result = await generateScene('Twelve seats in three rows', 'cinema', {
       apiKey: 'test-secret',
     });
-    const [url, options] = fetch.mock.calls[0];
+    const [url, options] = fetch.mock.calls[1];
     expect(url).toBe('https://api.anthropic.com/v1/messages');
     expect(options.headers['x-api-key']).toBe('test-secret');
     const body = JSON.parse(options.body);
     expect(body.output_config.format.type).toBe('json_schema');
+    expect(body.model).toBe('claude-haiku-4-5-20251001');
+    expect(JSON.parse(fetch.mock.calls[0][1].body).max_tokens).toBe(400);
     expect(body.messages[0].content).toBe('Twelve seats in three rows');
     expect(JSON.stringify(body.output_config.format.schema)).not.toContain('"maximum":');
     expect(result.layout.floors[0].resources).toHaveLength(12);
@@ -83,7 +101,7 @@ describe('Claude scene generation', () => {
     },
   );
   it('repairs invalid decorative dimensions once while preserving two parking floors', async () => {
-    const data = blueprint();
+    const data = { ...blueprint(), kind: 'parking' };
     data.floors[0].groups[0] = {
       ...data.floors[0].groups[0],
       rows: 2,
@@ -129,6 +147,7 @@ describe('Claude scene generation', () => {
       );
     const fetch = vi
       .fn()
+      .mockResolvedValueOnce(intent('parking', 2, 10))
       .mockResolvedValueOnce(response(invalid))
       .mockResolvedValueOnce(response(corrected));
     vi.stubGlobal('fetch', fetch);
@@ -138,12 +157,48 @@ describe('Claude scene generation', () => {
       { apiKey: 'test-secret' },
     );
     expect(result.layout.floors.map((f) => f.resources.length)).toEqual([10, 10]);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const retry = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const retry = JSON.parse(fetch.mock.calls[2][1].body);
     expect(retry.messages[1].role).toBe('assistant');
     expect(retry.messages[2].content).toContain('floors.0.objects.0.depth');
     expect(retry.messages[2].content).toContain('0.3');
     expect(fetch.mock.calls[0][1].signal).toBe(fetch.mock.calls[1][1].signal);
+  });
+  it('blocks a parking description in a restaurant before generating geometry', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(intent('parking', 2, 10));
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      generateScene('parking building with 2 Storey ,each 10 parking slots', 'restaurant', {
+        apiKey: 'test-secret',
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringContaining('Open or create a parking venue'),
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetch.mock.calls[0][1].body).model).toBe('claude-haiku-4-5-20251001');
+  });
+  it('rejects category conversion instead of turning parking places into tables', () => {
+    expect(() => expandBlueprint({ ...blueprint(), kind: 'parking' }, 'restaurant')).toThrow(
+      'Generated category must be restaurant',
+    );
+  });
+  it('repairs requested floor counts instead of accepting a smaller scene', async () => {
+    const corrected = blueprint();
+    corrected.floors.push(structuredClone(corrected.floors[0]));
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(intent('cinema', 2, 12))
+      .mockResolvedValueOnce(response(blueprint()))
+      .mockResolvedValueOnce(response(corrected));
+    vi.stubGlobal('fetch', fetch);
+    const result = await generateScene('Cinema with two floors of twelve seats each', 'cinema', {
+      apiKey: 'test-secret',
+    });
+    expect(result.layout.floors.map((f) => f.resources.length)).toEqual([12, 12]);
+    expect(JSON.parse(fetch.mock.calls[2][1].body).messages[2].content).toContain(
+      'exactly 2 floors',
+    );
   });
   it('rejects truncated and invalid output', async () => {
     const fetch = vi
@@ -153,15 +208,18 @@ describe('Claude scene generation', () => {
     await expect(
       generateScene('Build a venue', 'restaurant', { apiKey: 'test-secret' }),
     ).rejects.toThrow('incomplete');
-    fetch.mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            stop_reason: 'end_turn',
-            content: [{ type: 'text', text: '{\"floors\":[]}' }],
-          }),
-        ),
-    );
+    fetch
+      .mockReset()
+      .mockResolvedValueOnce(intent('restaurant'))
+      .mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              stop_reason: 'end_turn',
+              content: [{ type: 'text', text: '{\"floors\":[]}' }],
+            }),
+          ),
+      );
     await expect(
       generateScene('Build a venue', 'restaurant', { apiKey: 'test-secret' }),
     ).rejects.toThrow('automatic correction');
