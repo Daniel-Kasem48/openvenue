@@ -44,6 +44,7 @@ from earlier runs.
 - Each browser test now starts the existing application factory on its own ephemeral port and closes the API and database pool afterward. Production rate limits remain enabled; no reset endpoint or production test flag was added.
 - The database is retained across tests and suite runs. `TEST_DATABASE_URL` is preferred, with `DATABASE_URL` accepted for compatibility.
 - A separate camera-test failure reproduced three times: asynchronous canvas sizing put the drag centre below the viewport. A Playwright hover action now ensures the canvas is actionable before reading gesture coordinates. Camera assertions are unchanged.
+- The pricing-panel test now locates the summary by its heading prefix and opens it only when closed, supporting both the original UI and the restyle’s default-open panel with a mode suffix.
 - Two regression tests prove the login limit still applies inside a test and does not leak to the next test. The second test failed with 429 before the harness fix.
 
 ## Verification
@@ -57,3 +58,9 @@ Completed on 2026-11-15 against a populated dedicated PostgreSQL database (107 v
 - Independent review found no substantive issues.
 
 The task branch is based on remote `main`; the additional local event-seat test and uncommitted Tailwind restyle are not bundled into this PR.
+
+### Current-project compatibility
+
+The same test-only patch was applied to the active checkout without changing Claude's application files. An isolated snapshot of that application code (local event-seat feature plus Tailwind restyle) passed all **20 browser tests in three consecutive full runs**, retaining the same database. The active checkout also passed **50 unit/API tests**, TypeScript and formatting; the snapshot production build passed on each run.
+
+The original-UI pricing-panel test passed after the selector adjustment. Draft PR: https://github.com/Daniel-Kasem48/openvenue/pull/1. The PR is not merged or deployed.

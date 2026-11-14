@@ -638,7 +638,10 @@ test('layout studio keeps the canvas stable and finds editable items by name', a
   await expect(page.getByLabel('Resource label')).toHaveValue('Table 1');
   await page.getByText('Floor settings', { exact: true }).click();
   await page.getByLabel('Floor name', { exact: true }).fill('Main dining room');
-  await page.getByText('Reservation pricing', { exact: true }).click();
+  const pricing = page.locator('details').filter({
+    has: page.locator('summary', { hasText: /^Reservation pricing/ }),
+  });
+  if ((await pricing.getAttribute('open')) === null) await pricing.locator('summary').click();
   await page.getByRole('combobox', { name: 'Pricing mode' }).selectOption('uniform');
   await page.getByLabel('Standard reservation price').fill('12');
   await page.getByRole('button', { name: 'Save layout', exact: true }).click();
@@ -649,7 +652,7 @@ test('layout studio keeps the canvas stable and finds editable items by name', a
   await page.screenshot({ path: '/tmp/openvenue-editor-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByText('Reservation pricing', { exact: true }).scrollIntoViewIfNeeded();
+  await pricing.locator('summary').scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', { name: 'Save layout', exact: true })).toBeInViewport();
   await page.screenshot({ path: '/tmp/openvenue-editor-mobile.png', fullPage: true });
 });
