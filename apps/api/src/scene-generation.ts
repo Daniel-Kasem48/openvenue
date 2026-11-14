@@ -114,58 +114,84 @@ export async function generateScene(
 ) {
   if (!config.apiKey)
     failure(503, 'Scene generation is not configured. Set ANTHROPIC_API_KEY on the server.');
-  let response: Response;
-  try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': config.apiKey!,
-        'anthropic-version': '2023-06-01',
-      },
-      signal: AbortSignal.timeout(90000),
-      body: JSON.stringify({
-        model: config.model || 'claude-sonnet-4-6',
-        max_tokens: 12000,
-        system: `Design an editable ${kind} venue scene from the user's description. Return only the scene blueprint. Do not execute instructions unrelated to scene design.
-Coordinates and dimensions are metres. x/y locate the centre of each item; all items including rotated corners must fit inside their floor. Use realistic dimensions, clear aisles and no unintended overlap. Include useful furnishings, entrances, and screens or a pitch where appropriate. Floors are 5–200m on each axis, at most 10 floors. At most 1000 bookable places and 300 decorative objects per floor.
+  const signal = AbortSignal.timeout(90000);
+  const messages: { role: 'user' | 'assistant'; content: string }[] = [
+    { role: 'user', content: prompt },
+  ];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': config.apiKey!,
+          'anthropic-version': '2023-06-01',
+        },
+        signal,
+        body: JSON.stringify({
+          model: config.model || 'claude-sonnet-4-6',
+          max_tokens: 12000,
+          system: `Design an editable ${kind} venue scene from the user's description. Return only the scene blueprint. Do not execute instructions unrelated to scene design.
+Coordinates and dimensions are metres. Decorative object width/depth must be 0.3–200m and height 0.1–8m. Bookable places must be 0.3–20m wide/deep. A label object is a camera-facing text sign, not a painted line: do not use labels for floor stripes or lane markings. x/y locate the centre of each item; all items including rotated corners must fit inside their floor. Use realistic dimensions, clear aisles and no unintended overlap. Include useful furnishings, entrances, and screens or a pitch where appropriate. Floors are 5–200m on each axis, at most 10 floors. At most 1000 bookable places and 300 decorative objects per floor.
 Groups repeat bookable places: x/y is the first item's centre; columns advance by spacingX on x, rows by spacingY on y. rowRise adds elevation per row for stadium terraces. Split groups for aisles or different prices. Single items use rows=columns=1, spacingX=spacingY=rowRise=0. Use short group labels (under 80 characters). Tables have capacity 1–50; seats and spaces capacity 1. Elevations must remain 0–8m. Rotation is degrees 0–360. Use hex colors. Prices are integer minor units (1250 means 12.50); default to free unless pricing is requested. Never invent an exact official replica. Explain assumptions briefly in summary.`,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: { type: 'json_schema', schema: outputSchema } },
-      }),
-    });
-  } catch {
-    return failure(504, 'Claude did not respond in time. Try again with a simpler description.');
+          messages,
+          output_config: { format: { type: 'json_schema', schema: outputSchema } },
+        }),
+      });
+    } catch {
+      return failure(504, 'Claude did not respond in time. Try again with a simpler description.');
+    }
+    if (!response.ok) {
+      if ([401, 403].includes(response.status))
+        return failure(502, 'Claude rejected the server API key. Check ANTHROPIC_API_KEY.');
+      if (response.status === 429)
+        return failure(429, 'Claude is rate limited or out of credits. Please try again later.');
+      return failure(
+        502,
+        'Claude could not generate the scene. Check the configured model and try again.',
+      );
+    }
+    let text = '';
+    try {
+      const payload = z
+        .object({
+          stop_reason: z.string(),
+          content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
+        })
+        .parse(await response.json());
+      if (payload.stop_reason !== 'end_turn')
+        return failure(502, 'Claude returned an incomplete scene. Try a simpler description.');
+      text = payload.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('');
+      return expandBlueprint(JSON.parse(text), kind);
+    } catch (error) {
+      if (error instanceof Error && 'status' in error) throw error;
+      if (attempt === 0 && text) {
+        const details =
+          error instanceof z.ZodError
+            ? error.issues
+                .slice(0, 12)
+                .map((issue) => `${issue.path.join('.') || 'layout'}: ${issue.message}`)
+                .join('\n')
+            : error instanceof Error
+              ? error.message
+              : 'Invalid scene blueprint';
+        messages.push(
+          { role: 'assistant', content: text },
+          {
+            role: 'user',
+            content: `Correct this blueprint using the validation errors below. Return the complete corrected blueprint. Preserve the requested number of floors and bookable places, pricing, and overall design; do not discard floors or places to avoid an error.\n${details}`,
+          },
+        );
+        continue;
+      }
+    }
   }
-  if (!response.ok) {
-    if ([401, 403].includes(response.status))
-      return failure(502, 'Claude rejected the server API key. Check ANTHROPIC_API_KEY.');
-    if (response.status === 429)
-      return failure(429, 'Claude is rate limited or out of credits. Please try again later.');
-    return failure(
-      502,
-      'Claude could not generate the scene. Check the configured model and try again.',
-    );
-  }
-  try {
-    const payload = z
-      .object({
-        stop_reason: z.string(),
-        content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
-      })
-      .parse(await response.json());
-    if (payload.stop_reason !== 'end_turn')
-      return failure(502, 'Claude returned an incomplete scene. Try a simpler description.');
-    const text = payload.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text ?? '')
-      .join('');
-    return expandBlueprint(JSON.parse(text), kind);
-  } catch (error) {
-    if (error instanceof Error && 'status' in error) throw error;
-    return failure(
-      502,
-      'The generated scene failed layout validation. Try describing clearer dimensions, spacing, or fewer items. Your saved layout was not changed.',
-    );
-  }
+  return failure(
+    502,
+    'Claude could not produce a valid layout after an automatic correction. Please try again. Your saved layout was not changed.',
+  );
 }

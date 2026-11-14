@@ -164,7 +164,9 @@ instead: replacing booked resources is protected by database constraints.
 
 Only the supplied description and venue category are sent to Anthropic—not guest
 records or existing bookings. Calls use the workspace's API credits, are limited to
-five requests per 15 minutes per client address, and have a 90-second timeout.
+five requests per 15 minutes per client address, and have a shared 90-second timeout.
+Invalid generated layouts receive one automatic correction attempt with Claude
+(additional API usage); both attempts are validated before anything is returned.
 Closing the dialog cancels the browser request but may not stop provider billing.
 Output is validated on the server, expands repeated rows into normal editable
 resources, and uses the existing PostgreSQL layout storage when saved. Invalid,
