@@ -173,6 +173,6 @@ test('painting a 3D seat assigns its tier without moving or booking it', async (
   ).layout.floors[0].resources[0];
   expect(saved.tierId).toBe(tierId);
   expect([saved.x, saved.y]).toEqual([floor.width / 2, floor.depth / 2]);
-  const bookings = await (await request.get('/api/bookings')).json();
-  expect(bookings.some((booking: any) => booking.venueId === venue.id)).toBe(false);
+  const bookings = await (await request.get(`/api/bookings?venueId=${venue.id}`)).json();
+  expect(bookings.items.some((booking: any) => booking.venueId === venue.id)).toBe(false);
 });

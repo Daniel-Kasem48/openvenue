@@ -80,7 +80,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('saved tier booking prices', () 
     }
     venue.layout.pricing.tiers[0].amount = 1500;
     await save();
-    const saved = await (await call('/bookings', undefined, 'GET')).json();
-    expect(saved.find((booking: any) => booking.id === bookings[0].id).price).toBe(0);
+    const saved = await (await call(`/bookings?venueId=${venue.id}`, undefined, 'GET')).json();
+    expect(saved.items.find((booking: any) => booking.id === bookings[0].id).price).toBe(0);
   });
 });
