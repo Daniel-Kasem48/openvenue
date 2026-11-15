@@ -11,6 +11,7 @@ import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   overviewRangeSchema,
+  loginSchema,
   layoutSchema,
   seatLocation,
   reservationPrice,
@@ -31,6 +32,7 @@ import { adminBookingSelect, bookingColumns, bookingsCsv, queryBookings } from '
 import { overview } from './overview';
 import { initialize, syncResources, transaction } from './database';
 import { authentication, tokenHash } from './auth';
+import { audit, registerAccounts } from './accounts';
 import { generateScene, SceneGenerationError } from './scene-generation';
 
 class RootModule {}
@@ -63,7 +65,10 @@ export async function createApp(config: {
     await pool.end();
   };
   const router = express.Router(),
-    { matches, guard } = authentication(pool, config.adminPassword);
+    { verifyLogin, guard, readGuard, ownerGuard } = await authentication(
+      pool,
+      config.adminPassword,
+    );
   const securityHeaders = (embeddable: boolean) =>
     helmet({
       frameguard: embeddable ? false : { action: 'sameorigin' },
@@ -116,13 +121,15 @@ export async function createApp(config: {
     '/auth/login',
     rateLimit({ windowMs: 15 * 60000, limit: 10, legacyHeaders: false }),
     async (req, res) => {
-      const { password } = z.object({ password: z.string().min(1).max(256) }).parse(req.body);
-      if (!matches(password)) fail(401, 'Invalid password');
+      const { email, password } = loginSchema.parse(req.body);
+      const principal = await verifyLogin(email, password);
+      if (!principal) return fail(401, 'Invalid email or password');
       const token = randomBytes(32).toString('hex');
       await pool.query('DELETE FROM sessions WHERE expires_at<=now()');
-      await pool.query("INSERT INTO sessions VALUES($1,now()+interval '8 hours')", [
-        tokenHash(token),
-      ]);
+      await pool.query(
+        "INSERT INTO sessions(token_hash,expires_at,user_id) VALUES($1,now()+interval '8 hours',$2)",
+        [tokenHash(token), principal.userId],
+      );
       res.cookie('ov_session', token, cookieOptions).json({ authenticated: true });
     },
   );
@@ -148,9 +155,18 @@ export async function createApp(config: {
       );
     },
   );
-  router.get('/auth/me', guard, (_req, res) => {
-    res.json({ authenticated: true });
+  router.get('/auth/me', readGuard, (_req, res) => {
+    const principal = res.locals.principal;
+    res.json({
+      authenticated: true,
+      role: principal.role,
+      bootstrap: !principal.userId,
+      user: principal.userId
+        ? { id: principal.userId, name: principal.name, role: principal.role }
+        : null,
+    });
   });
+  registerAccounts(router, pool, ownerGuard);
   router.post('/auth/logout', async (req, res) => {
     if (typeof req.cookies?.ov_session === 'string')
       await pool.query('DELETE FROM sessions WHERE token_hash=$1', [
@@ -274,6 +290,20 @@ export async function createApp(config: {
         for (const resource of resources) reservationPrice(body.layout, resource, pricing);
       }
       await syncResources(client, old.id, body.layout);
+      await audit(client, res.locals.principal, 'layout.saved', 'venue', old.id);
+      const priceFields = (layout: ReturnType<typeof layoutSchema.parse>) =>
+        JSON.stringify({
+          pricing: layout.pricing,
+          resources: layout.floors.flatMap((f) =>
+            f.resources.map((r) => ({
+              id: r.id,
+              price: r.price,
+              tierId: 'tierId' in r ? r.tierId : undefined,
+            })),
+          ),
+        });
+      if (priceFields(layoutSchema.parse(old.layout)) !== priceFields(body.layout))
+        await audit(client, res.locals.principal, 'pricing.changed', 'venue', old.id);
       return (
         await client.query(
           'UPDATE venues SET name=$2,layout=$3,revision=revision+1 WHERE id=$1 RETURNING *',
@@ -460,6 +490,7 @@ export async function createApp(config: {
         await client.query('DELETE FROM event_seat_blocks WHERE show_id=$1', [showId]);
         await client.query('DELETE FROM show_prices WHERE show_id=$1', [showId]);
         await client.query('DELETE FROM shows WHERE id=$1', [showId]);
+        if (cancel) await audit(client, res.locals.principal, 'event.cancelled', 'show', showId);
         return count;
       });
       res.json({ deleted: true, cancelledBookings: affected });

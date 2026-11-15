@@ -601,7 +601,7 @@ test('admin sign-in supports retry, hides dismissed credentials and opens manage
   await page.getByRole('button', { name: 'Show password', exact: true }).click();
   await expect(password).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('alert')).toHaveText('Invalid password');
+  await expect(page.getByRole('alert')).toHaveText('Invalid email or password');
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Close dialog' }).click();
   await openLogin.click();

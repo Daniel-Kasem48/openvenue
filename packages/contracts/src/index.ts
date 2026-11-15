@@ -434,3 +434,49 @@ export const bookingPatchSchema = z
     (value) => !(value.status && value.checkedIn === true),
     'Terminal reservations cannot be checked in',
   );
+
+export const roleSchema = z.enum(['owner', 'manager', 'staff']);
+export type Role = z.infer<typeof roleSchema>;
+export const accountSchema = z.object({
+  id: uuid,
+  email: z.email(),
+  name,
+  role: roleSchema,
+  createdAt: z.iso.datetime({ offset: true }),
+  disabledAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type Account = z.infer<typeof accountSchema>;
+export const loginSchema = z.object({
+  email: z
+    .email()
+    .max(254)
+    .transform((value) => value.toLowerCase())
+    .optional(),
+  password: z.string().min(1).max(256),
+});
+export const createAccountSchema = z
+  .object({
+    email: z
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    name,
+    password: z.string().min(12).max(128),
+    role: roleSchema,
+  })
+  .strict();
+export const updateAccountSchema = z
+  .object({ role: roleSchema.optional(), disabled: z.boolean().optional() })
+  .strict()
+  .refine(
+    (value) => value.role !== undefined || value.disabled !== undefined,
+    'Choose an account setting',
+  );
+
+export const sessionSchema = z.object({
+  authenticated: z.literal(true),
+  role: roleSchema,
+  bootstrap: z.boolean(),
+  user: z.object({ id: uuid, name, role: roleSchema }).nullable(),
+});
+export type Session = z.infer<typeof sessionSchema>;
