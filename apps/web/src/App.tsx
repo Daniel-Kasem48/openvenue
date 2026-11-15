@@ -20,7 +20,7 @@ import { Modal } from './Modal';
 import { SceneBoundary } from './SceneBoundary';
 import { GenerateSceneDialog } from './GenerateSceneDialog';
 import { LayoutInspector } from './LayoutInspector';
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
   reservationPrice,
   seatLocation,
@@ -77,6 +77,12 @@ export default function App() {
   const [venues, setVenues] = useState<Venue[]>([]),
     [venueId, setVenueId] = useState(''),
     [draft, setDraft] = useState<Venue | null>(null);
+  const [venueSearch, setVenueSearch] = useState('');
+  const selectedVenueButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => setVenueSearch(''), [venueId]);
+  useEffect(() => {
+    selectedVenueButton.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [venueId, venueSearch]);
   const [floorIndex, setFloorIndex] = useState(0),
     [selected, setSelected] = useState(''),
     [view, setView] = useState<'2d' | '3d'>('3d');
@@ -636,29 +642,74 @@ export default function App() {
         )}
         <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
         <div className={sideLabel}>YOUR VENUES</div>
-        <div className="venue-list -mx-1 overflow-auto px-1 max-sm:flex max-sm:gap-1.5 max-sm:overflow-x-auto">
-          {venues.map((v) => (
-            <button
-              className={`venue-link mb-0.5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] leading-snug transition max-sm:w-auto max-sm:min-w-36 max-sm:shrink-0 ${
-                venueId === v.id ? 'bg-white/10 text-white' : 'text-forest-100 hover:bg-white/5'
-              }`}
-              key={v.id}
-              onClick={() => chooseVenue(v.id)}
-            >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-base text-sprout-300 ring-1 ring-white/10 max-sm:size-7">
-                {types[v.kind].icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                {v.name}
-                <small className="mt-0.5 text-[11px] text-forest-300/80">
-                  {types[v.kind].name}
-                </small>
-              </span>
-              {venueId === v.id && (
-                <span className="size-1.5 shrink-0 rounded-full bg-sprout-300 max-sm:hidden" />
-              )}
-            </button>
-          ))}
+        {venues.length > 6 && (
+          <input
+            type="search"
+            aria-label="Search venues"
+            placeholder="Search venues"
+            className="mb-3 min-h-9 text-sm text-ink"
+            value={venueSearch}
+            onChange={(event) => setVenueSearch(event.target.value)}
+          />
+        )}
+        <div className="venue-list -mx-1 min-h-0 overflow-auto px-1 max-sm:flex max-sm:gap-1.5 max-sm:overflow-x-auto">
+          {(['restaurant', 'parking', 'cinema', 'stadium'] as const).map((kind) => {
+            const matches = venues.filter(
+              (v) =>
+                v.kind === kind &&
+                `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
+            );
+            if (!matches.length) return null;
+            return (
+              <div key={kind} className="max-sm:flex max-sm:gap-1.5">
+                <div className="px-3 pt-3 pb-1 text-[11px] font-semibold text-forest-300 max-sm:hidden">
+                  {
+                    {
+                      restaurant: 'Restaurants',
+                      parking: 'Parking',
+                      cinema: 'Cinemas',
+                      stadium: 'Stadiums',
+                    }[kind]
+                  }
+                </div>
+                {matches.map((v) => (
+                  <button
+                    className={`venue-link mb-0.5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] leading-snug transition max-sm:w-auto max-sm:min-w-36 max-sm:shrink-0 ${
+                      venueId === v.id
+                        ? 'bg-white/10 text-white'
+                        : 'text-forest-100 hover:bg-white/5'
+                    }`}
+                    key={v.id}
+                    ref={venueId === v.id ? selectedVenueButton : undefined}
+                    onClick={() => chooseVenue(v.id)}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-base text-sprout-300 ring-1 ring-white/10 max-sm:size-7">
+                      {types[v.kind].icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate" title={v.name}>
+                        {v.name}
+                      </span>
+                      <small className="mt-0.5 text-[11px] text-forest-300/80">
+                        {types[v.kind].name}
+                      </small>
+                    </span>
+                    {venueId === v.id && (
+                      <span className="size-1.5 shrink-0 rounded-full bg-sprout-300 max-sm:hidden" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+          {venues.length > 0 &&
+            !venues.some((v) =>
+              `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
+            ) && (
+              <p role="status" className="px-3 py-2 text-xs text-forest-300">
+                No matching venues.
+              </p>
+            )}
         </div>
         {admin && (
           <button

@@ -199,3 +199,6 @@ Directory cards preview the first floor with lightweight, noninteractive SVG geo
 next event dates for cinema and stadium venues. Previews refresh after saved layout changes;
 booking and management buttons retain their existing labels. The venue listing includes optional
 `nextEventAt` metadata (null when no future event exists), computed in one grouped database query.
+The sidebar groups venues by kind and shows name/kind search when more than six venues exist.
+Long names keep their full accessible name and tooltip; selecting a venue clears the search and
+brings that venue into view.

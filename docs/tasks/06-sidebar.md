@@ -20,4 +20,4 @@ way to find one.
 
 ## Acceptance
 
-- [ ] 50 venues: list stays usable and search finds one in a single keystroke sequence.
+- [x] 50 venues: list stays usable and search finds one in a single keystroke sequence.
