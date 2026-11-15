@@ -76,6 +76,10 @@ export async function initialize(pool: Pool) {
     new URL('../migrations/007_booking_details.sql', import.meta.url),
     'utf8',
   );
+  const eventPricingSql = await readFile(
+    new URL('../migrations/008_show_pricing.sql', import.meta.url),
+    'utf8',
+  );
   await transaction(pool, async (client) => {
     await client.query('SELECT pg_advisory_xact_lock(745921)');
     await client.query(sql);
@@ -85,6 +89,7 @@ export async function initialize(pool: Pool) {
     await client.query(eventsSql);
     await client.query(archiveSql);
     await client.query(bookingDetailsSql);
+    await client.query(eventPricingSql);
     if ((await client.query('SELECT id FROM venues LIMIT 1')).rowCount) return;
     for (const [kind, name] of [
       ['restaurant', 'The Greenhouse'],

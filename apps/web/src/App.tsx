@@ -1,3 +1,4 @@
+import { EventPricingCard } from './EventPricingCard';
 import { VenueSettings } from './VenueSettings';
 import { Menu } from './Menu';
 import { LayoutThumbnail } from './LayoutThumbnail';
@@ -149,10 +150,15 @@ export default function App() {
     setManagingSeats(false);
   }, [venueId, editing, admin]);
   const [busy, setBusy] = useState<string[]>([]),
-    [availabilityReady, setAvailabilityReady] = useState(false),
+    [availabilityLoaded, setAvailabilityReady] = useState(false),
     [guest, setGuest] = useState('');
   const [guestEmail, setGuestEmail] = useState(''),
     [guestPhone, setGuestPhone] = useState('');
+  const [priceQuote, setPriceQuote] = useState<{
+    key: string;
+    prices: Record<string, number>;
+    currency: string;
+  } | null>(null);
   const [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [working, setWorking] = useState(false),
@@ -181,10 +187,6 @@ export default function App() {
     : resource
       ? [resource]
       : [];
-  const total = venue
-    ? bookingResources.reduce((sum, r) => sum + reservationPrice(venue.layout, r), 0)
-    : 0;
-  const currency = venue?.layout.pricing.currency ?? 'USD';
   useEffect(() => {
     const ids = new Set(venue?.layout.floors.flatMap((f) => f.resources.map((r) => r.id)) ?? []);
     setSelectedSeats((current) => current.filter((id) => ids.has(id)));
@@ -240,6 +242,23 @@ export default function App() {
           : '',
   });
   const interval = timeResult.success ? timeResult.data : null;
+  const quoteKey = JSON.stringify([
+    venueId,
+    showId,
+    interval?.start,
+    interval?.end,
+    venue?.revision,
+    refresh,
+  ]);
+  const availabilityReady = availabilityLoaded && priceQuote?.key === quoteKey;
+  const quotedPrice = (resource: Resource) =>
+    (priceQuote?.key === quoteKey ? priceQuote.prices[resource.id] : undefined) ??
+    (venue ? reservationPrice(venue.layout, resource) : 0);
+  const total = bookingResources.reduce((sum, resource) => sum + quotedPrice(resource), 0);
+  const currency =
+    (priceQuote?.key === quoteKey ? priceQuote.currency : undefined) ??
+    venue?.layout.pricing.currency ??
+    'USD';
   const run = async (work: () => Promise<void>) => {
     setWorking(true);
     setError('');
@@ -301,18 +320,20 @@ export default function App() {
     timeEnd = interval?.end;
   useEffect(() => {
     setAvailabilityReady(false);
+    setPriceQuote(null);
     setBusy([]);
     setBlocked([]);
     if (!venueId || !timeStart || !timeEnd || (seatVenue && !showId)) return;
     const controller = new AbortController();
     const update = () =>
-      api<{ busy: string[]; blocked: string[] }>(
+      api<{ busy: string[]; blocked: string[]; prices: Record<string, number>; currency: string }>(
         `/venues/${venueId}/availability?${new URLSearchParams({ start: timeStart, end: timeEnd, ...(seatVenue ? { showId } : {}) })}`,
         { signal: controller.signal },
       )
         .then((data) => {
           setBusy(data.busy);
           setBlocked(data.blocked ?? []);
+          setPriceQuote({ key: quoteKey, prices: data.prices, currency: data.currency });
           setAvailabilityReady(true);
         })
         .catch((e) => {
@@ -327,7 +348,7 @@ export default function App() {
       controller.abort();
       clearInterval(timer);
     };
-  }, [venueId, timeStart, timeEnd, showId, refresh, venue?.kind]);
+  }, [venueId, timeStart, timeEnd, showId, refresh, venue?.kind, venue?.revision, quoteKey]);
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -1332,18 +1353,29 @@ export default function App() {
                   className={`legend ml-auto flex min-w-0 flex-wrap gap-4 text-xs text-stone-500 max-lg:gap-2.5 ${priceColors ? '' : 'max-md:hidden'}`}
                 >
                   {priceColors &&
-                    current.layout.pricing.tiers?.map((tier) => (
-                      <span
-                        key={tier.id}
-                        className="flex min-w-0 max-w-full items-center gap-1.5 break-all"
-                      >
-                        <i
-                          className="size-2.5 shrink-0 rounded-sm ring-1 ring-stone-300"
-                          style={{ backgroundColor: tier.color }}
-                        />
-                        {tier.name} · {formatPrice(tier.amount, current.layout.pricing.currency)}
-                      </span>
-                    ))}
+                    current.layout.pricing.tiers?.map((tier) => {
+                      const assignedResource = current.layout.floors
+                        .flatMap((floor) => floor.resources)
+                        .find((resource) => resource.tierId === tier.id);
+                      const amount =
+                        !editing && assignedResource ? quotedPrice(assignedResource) : tier.amount;
+                      return (
+                        <span
+                          key={tier.id}
+                          className="flex min-w-0 max-w-full items-center gap-1.5 break-all"
+                        >
+                          <i
+                            className="size-2.5 shrink-0 rounded-sm ring-1 ring-stone-300"
+                            style={{ backgroundColor: tier.color }}
+                          />
+                          {tier.name} ·{' '}
+                          {formatPrice(
+                            amount,
+                            editing ? current.layout.pricing.currency : currency,
+                          )}
+                        </span>
+                      );
+                    })}
                   {(
                     [
                       ['Available', 'bg-[#d6e2d3] ring-[#9fb49b]'],
@@ -1483,6 +1515,18 @@ export default function App() {
                   ) : managingSeats && admin && showId ? (
                     <>
                       {timeFields}
+                      <EventPricingCard
+                        key={venueId + showId}
+                        venueId={venueId}
+                        showId={showId}
+                        layout={current.layout}
+                        run={run}
+                        working={working}
+                        onChanged={(text) => {
+                          setMessage(text);
+                          setRefresh((value) => value + 1);
+                        }}
+                      />
                       <EventSeatControls
                         key={venueId + showId + floor.id}
                         venueId={venueId}
@@ -1616,7 +1660,7 @@ export default function App() {
                             >
                               {seatLocation(r)}
                               <strong className="font-medium text-ink tabular-nums">
-                                {formatPrice(reservationPrice(venue!.layout, r), currency)}
+                                {formatPrice(quotedPrice(r), currency)}
                               </strong>
                             </p>
                           ))}
@@ -1657,7 +1701,7 @@ export default function App() {
 
                                 {selectedSeats.includes(r.id) ? ' · Selected' : ''}
                                 {venue?.layout.pricing.mode !== 'free'
-                                  ? ` · ${formatPrice(reservationPrice(venue!.layout, r), currency)}`
+                                  ? ` · ${formatPrice(quotedPrice(r), currency)}`
                                   : ''}
                                 {busy.includes(r.id)
                                   ? blocked.includes(r.id)

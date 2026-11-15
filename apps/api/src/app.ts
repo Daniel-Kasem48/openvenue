@@ -14,6 +14,8 @@ import {
   layoutSchema,
   seatLocation,
   reservationPrice,
+  eventPricingSchema,
+  type EventPricing,
   bookingSchema,
   eventSchema,
   bookingFiltersSchema,
@@ -311,6 +313,66 @@ export async function createApp(config: {
     if (!show) fail(404, 'Event not found');
     return show;
   }
+  async function readEventPricing(
+    client: Pool | PoolClient,
+    venueId: string,
+    showId: string,
+  ): Promise<EventPricing> {
+    const row = (
+      await client.query(
+        `SELECT s.price_multiplier,
+      coalesce(json_agg(json_build_object('tierId', p.tier_id, 'amount', p.amount) ORDER BY p.tier_id) FILTER (WHERE p.tier_id IS NOT NULL), '[]') AS overrides
+      FROM shows s LEFT JOIN show_prices p ON p.show_id=s.id
+      WHERE s.id=$1 AND s.venue_id=$2 GROUP BY s.id`,
+        [showId, venueId],
+      )
+    ).rows[0];
+    if (!row) fail(404, 'Event not found');
+    return eventPricingSchema.parse({
+      multiplier: Number(row.price_multiplier),
+      overrides: row.overrides,
+    });
+  }
+  router.get('/venues/:id/shows/:showId/pricing', guard, async (req, res) => {
+    res.json(
+      await readEventPricing(
+        pool,
+        z.uuid().parse(req.params.id),
+        z.uuid().parse(req.params.showId),
+      ),
+    );
+  });
+  router.put('/venues/:id/shows/:showId/pricing', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id),
+      showId = z.uuid().parse(req.params.showId);
+    const pricing = eventPricingSchema.parse(req.body);
+    await transaction(pool, async (client) => {
+      await lockShow(client, venueId, showId);
+      const venue = (await client.query('SELECT layout FROM venues WHERE id=$1', [venueId]))
+        .rows[0];
+      const layout = layoutSchema.parse(venue.layout);
+      if (
+        pricing.overrides.some(
+          (override) => !layout.pricing.tiers?.some((tier) => tier.id === override.tierId),
+        )
+      )
+        fail(400, 'Price tier not found in this venue');
+      for (const resource of layout.floors.flatMap((floor) => floor.resources))
+        reservationPrice(layout, resource, pricing);
+      await client.query('UPDATE shows SET price_multiplier=$2 WHERE id=$1', [
+        showId,
+        pricing.multiplier,
+      ]);
+      await client.query('DELETE FROM show_prices WHERE show_id=$1', [showId]);
+      for (const override of pricing.overrides)
+        await client.query('INSERT INTO show_prices(show_id,tier_id,amount) VALUES($1,$2,$3)', [
+          showId,
+          override.tierId,
+          override.amount,
+        ]);
+    });
+    res.json(pricing);
+  });
   router.put('/venues/:id/shows/:showId', guard, async (req, res) => {
     const venueId = z.uuid().parse(req.params.id),
       showId = z.uuid().parse(req.params.showId),
@@ -371,6 +433,7 @@ export async function createApp(config: {
           [showId, show.title],
         );
         await client.query('DELETE FROM event_seat_blocks WHERE show_id=$1', [showId]);
+        await client.query('DELETE FROM show_prices WHERE show_id=$1', [showId]);
         await client.query('DELETE FROM shows WHERE id=$1', [showId]);
         return count;
       });
@@ -451,11 +514,21 @@ export async function createApp(config: {
   });
   router.get('/venues/:id/availability', async (req, res) => {
     const times = intervalSchema.parse(req.query);
+    const venue = (await pool.query('SELECT layout FROM venues WHERE id=$1', [req.params.id]))
+      .rows[0];
+    if (!venue) fail(404, 'Venue not found');
+    const layout = layoutSchema.parse(venue.layout);
     const rows = await pool.query(
       "SELECT resource_id FROM bookings WHERE venue_id=$1 AND status='confirmed' AND starts_at<$3 AND ends_at>$2",
       [req.params.id, times.start, times.end],
     );
     const showId = z.uuid().optional().parse(req.query.showId);
+    const pricing = showId ? await readEventPricing(pool, req.params.id, showId) : undefined;
+    const prices = Object.fromEntries(
+      layout.floors
+        .flatMap((floor) => floor.resources)
+        .map((resource) => [resource.id, reservationPrice(layout, resource, pricing)]),
+    );
     const blocked = await pool.query(
       `SELECT b.resource_id FROM event_seat_blocks b JOIN shows s ON s.id=b.show_id WHERE s.venue_id=$1 AND ($4::uuid IS NULL OR s.id=$4) AND s.starts_at<$3 AND s.ends_at>$2`,
       [req.params.id, times.start, times.end, showId ?? null],
@@ -464,6 +537,8 @@ export async function createApp(config: {
     res.json({
       busy: [...new Set([...rows.rows.map((r) => r.resource_id), ...blockedIds])],
       blocked: blockedIds,
+      prices,
+      currency: layout.pricing.currency,
     });
   });
   router.post(
@@ -531,15 +606,20 @@ export async function createApp(config: {
           ).rowCount
         )
           fail(409, 'Some selected seats are blocked for this event. Choose other seats.');
-        const total = ids.reduce(
-          (sum, id) =>
-            sum +
+        const eventPricing = body.showId
+          ? await readEventPricing(client, body.venueId, body.showId)
+          : undefined;
+        const prices = Object.fromEntries(
+          ids.map((id) => [
+            id,
             reservationPrice(
               layout,
-              resources.find((r) => r.id === id)!,
+              resources.find((resource) => resource.id === id)!,
+              eventPricing,
             ),
-          0,
+          ]),
         );
+        const total = ids.reduce((sum, id) => sum + prices[id], 0);
         if (
           (total > 0 || body.expectedTotal !== undefined) &&
           (body.expectedTotal !== total || body.expectedCurrency !== layout.pricing.currency)
@@ -560,10 +640,7 @@ export async function createApp(config: {
                   times.end,
                   body.showId ?? null,
                   venue.kind === 'restaurant' ? body.partySize : 1,
-                  reservationPrice(
-                    layout,
-                    resources.find((r) => r.id === id)!,
-                  ),
+                  prices[id],
                   layout.pricing.currency,
                   seatLocation(resources.find((r) => r.id === id)!),
                   eventTitle,

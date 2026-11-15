@@ -1,5 +1,6 @@
 import { z } from 'zod';
 const uuid = z.uuid().transform((value) => value.toLowerCase());
+const priceAmountSchema = z.number().int().min(0).max(100000000);
 export const kindSchema = z.enum(['restaurant', 'parking', 'cinema', 'stadium']);
 export type VenueKind = z.infer<typeof kindSchema>;
 export const currencySchema = z.enum(['USD', 'EUR', 'GBP', 'AED', 'SAR', 'SYP']);
@@ -11,7 +12,7 @@ export const pricingSchema = z.object({
         id: z.uuid(),
         name: z.string().trim().min(1).max(100),
         color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        amount: z.number().int().min(0).max(100000000),
+        amount: priceAmountSchema,
       }),
     )
     .max(12)
@@ -21,7 +22,7 @@ export const pricingSchema = z.object({
     )
     .optional(),
   currency: currencySchema.default('USD'),
-  amount: z.number().int().min(0).max(100000000).default(0),
+  amount: priceAmountSchema.default(0),
 });
 const name = z.string().trim().min(1).max(100);
 export const resourceSchema = z.object({
@@ -43,7 +44,7 @@ export const resourceSchema = z.object({
   depth: z.number().min(0.3).max(20),
   rotation: z.number().min(0).max(360),
   shape: z.enum(['rectangle', 'round']).default('rectangle'),
-  price: z.number().int().min(0).max(100000000).optional(),
+  price: priceAmountSchema.optional(),
   tierId: z.uuid().optional(),
   color: z
     .string()
@@ -217,18 +218,51 @@ export const bookingSchema = z.object({
 });
 export { makeTemplate, cloneLayout, makeObject } from './templates';
 
-export function reservationPrice(layout: Layout, resource: Resource): number {
-  if (layout.pricing.mode === 'tiers')
-    return (
-      layout.pricing.tiers?.find((tier) => tier.id === resource.tierId)?.amount ??
-      resource.price ??
-      layout.pricing.amount
-    );
-  return layout.pricing?.mode === 'uniform'
-    ? layout.pricing.amount
-    : layout.pricing?.mode === 'per-resource'
-      ? (resource.price ?? 0)
-      : 0;
+export const eventPricingSchema = z
+  .object({
+    multiplier: z.number().min(0).max(99.99).multipleOf(0.01).default(1),
+    overrides: z
+      .array(
+        z.object({
+          tierId: z.uuid(),
+          amount: priceAmountSchema,
+        }),
+      )
+      .max(12)
+      .refine(
+        (overrides) =>
+          new Set(overrides.map((override) => override.tierId)).size === overrides.length,
+        'Choose each price tier only once',
+      )
+      .default([]),
+  })
+  .strict();
+export type EventPricing = z.infer<typeof eventPricingSchema>;
+
+export function reservationPrice(
+  layout: Layout,
+  resource: Resource,
+  eventPricing?: EventPricing,
+): number {
+  const base =
+    layout.pricing.mode === 'tiers'
+      ? (layout.pricing.tiers?.find((tier) => tier.id === resource.tierId)?.amount ??
+        resource.price ??
+        layout.pricing.amount)
+      : layout.pricing.mode === 'uniform'
+        ? layout.pricing.amount
+        : layout.pricing.mode === 'per-resource'
+          ? (resource.price ?? 0)
+          : 0;
+  if (!eventPricing) return base;
+  const override =
+    layout.pricing.mode === 'tiers'
+      ? eventPricing.overrides.find((override) => override.tierId === resource.tierId)?.amount
+      : undefined;
+  // Integer hundredths avoid floating-point drift; round each seat before summing a party.
+  return priceAmountSchema.parse(
+    override ?? Math.round((base * Math.round(eventPricing.multiplier * 100)) / 100),
+  );
 }
 export function formatPrice(amount: number, currency: string): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount / 100);
