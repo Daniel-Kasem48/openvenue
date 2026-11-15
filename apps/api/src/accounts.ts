@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { Router, RequestHandler } from 'express';
 import type { Pool, PoolClient } from 'pg';
@@ -66,12 +67,11 @@ export function registerAccounts(router: Router, pool: Pool, ownerGuard: Request
     res.status(201).json(user);
   });
   router.patch('/users/:id', ownerGuard, async (req, res) => {
+    const id = z.uuid().parse(req.params.id);
     const body = updateAccountSchema.parse(req.body);
     const user = await transaction(pool, async (client) => {
       await lockOwner(client, res.locals.principal);
-      const old = (
-        await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [req.params.id])
-      ).rows[0];
+      const old = (await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [id])).rows[0];
       if (!old) fail(404, 'Account not found');
       const role = body.role ?? old.role,
         disabledAt =

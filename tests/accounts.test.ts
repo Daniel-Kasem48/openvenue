@@ -58,7 +58,35 @@ describe.skipIf(!databaseUrl)('Staff accounts and authorization', () => {
       bootstrap: true,
       role: 'owner',
     });
-    for (const role of ['owner', 'manager', 'staff']) {
+    expect(
+      (
+        await request('/users', 'POST', {
+          email: 'invalid-first@example.test',
+          name: 'Invalid first',
+          password,
+          role: 'manager',
+        })
+      ).status,
+    ).toBe(400);
+    const originalCookies = [cookies.owner, cookies.legacy];
+    const firstOwners = await Promise.all(
+      ['owner', 'legacy'].map((role) =>
+        request(
+          '/users',
+          'POST',
+          { email: `owner-${randomUUID()}@example.test`, name: 'owner', password, role: 'owner' },
+          role,
+        ),
+      ),
+    );
+    for (let i = 0; i < firstOwners.length; i++)
+      if (firstOwners[i].status === 201) users[`bootstrap${i}`] = await firstOwners[i].json();
+    expect(firstOwners.map((response) => response.status).sort()).toEqual([201, 401]);
+    const winner = firstOwners.findIndex((response) => response.status === 201);
+    users.owner = users[`bootstrap${winner}`];
+    cookies.owner = originalCookies[winner];
+    cookies.legacy = originalCookies[1 - winner];
+    for (const role of ['manager', 'staff']) {
       const created = await request('/users', 'POST', {
         email: `${role}-${randomUUID()}@example.test`,
         name: role,
@@ -116,6 +144,7 @@ describe.skipIf(!databaseUrl)('Staff accounts and authorization', () => {
     expect(JSON.stringify(listed)).not.toContain('password');
   });
   it('checks operational and owner permissions on every guarded route', async () => {
+    expect((await request('/users/not-a-uuid', 'PATCH', { disabled: true })).status).toBe(400);
     const id = randomUUID();
     const routes: [string, string, unknown?][] = [
       ['/venues?includeArchived=1', 'GET'],
