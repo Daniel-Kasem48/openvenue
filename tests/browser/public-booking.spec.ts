@@ -46,6 +46,10 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
   await page.goto(`/book/${venue.id}?show=${show.id}`);
   await expect(page.locator('.sidebar,.topbar,.profile')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Admin sign in', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Choose your visit' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close booking', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Continue booking' }).click();
   await expect(page.getByLabel('Showtime')).toHaveValue(show.id);
   const fits = async () =>
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -58,7 +62,11 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
     .getByRole('combobox', { name: 'Resource', exact: true })
     .selectOption(venue.layout.floors[0].resources[0].id);
   await page.getByRole('button', { name: 'Review reservation →', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Review booking' })).toBeVisible();
   await page.getByLabel('Guest name').fill('Public guest');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Continue booking' }).click();
+  await expect(page.getByLabel('Guest name')).toHaveValue('Public guest');
   await page.getByLabel('Email (optional)', { exact: true }).fill('public-guest@example.test');
   await page.getByLabel('Phone (optional)', { exact: true }).fill('+49 123 456789');
   await fits();
@@ -83,6 +91,10 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
   await fits();
   expect(authRequests).toEqual([]);
   await page.goto(`/book/${venue.id}?show=${show.id}&embed=1`);
+  await expect(page.getByRole('dialog', { name: 'Choose your visit' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close booking', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Continue booking' }).click();
   await expect(page.getByLabel('Showtime')).toHaveValue(show.id);
   await expect(page.locator('.booking-hero,.page-footer,.sidebar,.topbar')).toHaveCount(0);
   const parent = createServer((_req, res) => {

@@ -23,6 +23,7 @@ test('guest supplies contact details, operator finds by email, checks in and exp
   await expect(page.getByRole('region', { name: 'Booking confirmation' })).toContainText(
     'Contact Browser Guest',
   );
+  await page.getByRole('button', { name: 'Close booking', exact: true }).click();
   await expect(page.locator('.profile')).toContainText('Admin sign in');
   await page.locator('.profile').click();
   await page.getByLabel('Password', { exact: true }).fill('integration-password-123');

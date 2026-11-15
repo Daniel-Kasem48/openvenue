@@ -1,3 +1,4 @@
+import { BookingDialog } from './booking/BookingDialog';
 import { EventPricingCard } from './EventPricingCard';
 import { BookingConfirmation } from './booking/BookingConfirmation';
 import { BookingProgress, type BookingStep } from './booking/BookingProgress';
@@ -1077,765 +1078,789 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
               )}
             </div>
           )}
-          {error && modal !== 'login' && (
-            <div
-              className="notice mb-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-800 ring-1 ring-red-200/70"
-              role="alert"
-            >
-              {error}
-              <button
-                className="rounded-md px-2 text-lg leading-none text-red-700 hover:bg-red-100"
-                aria-label="Dismiss error"
-                onClick={() => setError('')}
-              >
-                <X className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />
-              </button>
-            </div>
-          )}
-          <div
-            className={
-              message
-                ? "notice mb-4 flex items-center gap-2.5 rounded-xl bg-forest-50 px-4 py-3 text-[13px] text-forest-800 ring-1 ring-forest-200/70 before:size-1.5 before:shrink-0 before:rounded-full before:bg-forest-500 before:content-['']"
-                : 'sr-only'
-            }
-            role="status"
-            aria-live="polite"
+          <BookingDialog
+            key={venueId}
+            enabled={!admin && tab === 'map' && step !== 'venues'}
+            step={step}
+            working={working}
           >
-            {message}
-          </div>
-          {!admin && tab === 'map' && (publicBooking || step !== 'done') && (
-            <BookingProgress step={step} publicPage={!!publicBooking} />
-          )}
-          {tab === 'overview' && session?.bootstrap && (
-            <p className="mb-4">
-              Replace the shared setup password with your own account.{' '}
-              <button className="text-button" onClick={() => setTab('team')}>
-                Create first owner
-              </button>
-            </p>
-          )}
-          {tab === 'team' && session?.role === 'owner' ? (
-            <Team bootstrap={session.bootstrap} onChange={refreshSession} />
-          ) : tab === 'overview' && admin ? (
-            <Overview
-              onReservations={showBookings}
-              onEvent={(id, eventId) => {
-                chooseVenue(id);
-                setOverviewEvent(eventId);
-              }}
-            />
-          ) : tab === 'bookings' ? (
-            <Reservations onMessage={setMessage} onChange={() => setRefresh((n) => n + 1)} />
-          ) : step === 'venues' ? (
-            <section aria-label="Venue directory">
+            {error && modal !== 'login' && (
               <div
-                className="directory-filters mb-6 flex flex-wrap gap-2"
-                aria-label="Filter venues"
+                className="notice mb-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-800 ring-1 ring-red-200/70"
+                role="alert"
               >
-                {(['all', 'restaurant', 'parking', 'cinema', 'stadium'] as const).map((type) => (
-                  <button
-                    key={type}
-                    className={`${filter === type ? 'primary' : 'secondary'} rounded-full`}
-                    aria-pressed={filter === type}
-                    onClick={() => setFilter(type)}
-                  >
-                    {type === 'all' ? 'All venues' : types[type].name}
-                  </button>
-                ))}
-              </div>
-              <div className="venue-directory grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-6">
-                {venues
-                  .filter((v) => !v.archivedAt && (filter === 'all' || v.kind === filter))
-                  .map((v) => (
-                    <article
-                      className="panel directory-card flex flex-col transition duration-200 hover:-translate-y-0.5 hover:shadow-float"
-                      key={v.id}
-                    >
-                      <LayoutThumbnail venue={v} />
-                      <div className="directory-details flex flex-1 flex-col p-6">
-                        <div className="eyebrow">{types[v.kind].name}</div>
-                        <h2 className="mt-2 mb-1">{v.name}</h2>
-                        <p className="mb-6 text-[13px] text-stone-500">
-                          {v.layout.floors.reduce((n, f) => n + f.resources.length, 0)}{' '}
-                          {v.kind === 'restaurant'
-                            ? 'tables'
-                            : v.kind === 'parking'
-                              ? 'parking spaces'
-                              : 'seats'}{' '}
-                          · {v.layout.floors.length}{' '}
-                          {v.layout.floors.length === 1 ? 'floor' : 'floors'}
-                        </p>
-                        {['cinema', 'stadium'].includes(v.kind) && v.nextEventAt && (
-                          <p className="mb-4 text-[13px] text-stone-500">
-                            Next event ·{' '}
-                            <time dateTime={v.nextEventAt}>
-                              {new Date(v.nextEventAt).toLocaleString()}
-                            </time>
-                          </p>
-                        )}
-                        <button
-                          className="primary full mt-auto h-auto min-h-9 py-2 text-left whitespace-normal"
-                          onClick={() => chooseVenue(v.id)}
-                        >
-                          {admin ? 'Manage' : 'Book'} {v.name} →
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-              </div>
-              {loaded && !activeVenues.some((v) => filter === 'all' || v.kind === filter) && (
-                <p className="empty">No venues in this category yet.</p>
-              )}
-              {!loaded && <p className="empty">Loading venues…</p>}
-            </section>
-          ) : step === 'done' && confirmation ? (
-            <BookingConfirmation confirmation={confirmation} venue={venue} onAgain={directory} />
-          ) : !admin && step === 'time' && venue ? (
-            <section className="panel journey-panel mx-auto max-w-[640px] p-8 max-sm:p-6 [&_label]:my-5">
-              {!publicBooking && (
-                <button className="text-button -ml-2" onClick={directory}>
-                  ← All venues
+                {error}
+                <button
+                  className="rounded-md px-2 text-lg leading-none text-red-700 hover:bg-red-100"
+                  aria-label="Dismiss error"
+                  onClick={() => setError('')}
+                >
+                  <X
+                    className="size-4 inline-block shrink-0"
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                  />
                 </button>
-              )}
-              <div className="eyebrow mt-4">{types[venue.kind].name}</div>
-              <h2 className="mt-2 mb-2 text-[26px]">{venue.name}</h2>
-              <p className="leading-relaxed text-stone-600">
-                {seatVenue
-                  ? 'Choose your screening before selecting a seat.'
-                  : 'When will you visit? Availability is checked for the whole stay.'}
-              </p>
-              {timeFields}
-              {interval && !validTime && !seatVenue && (
-                <p className="field-error">Choose an arrival time in the future.</p>
-              )}
-              <p className="muted">Times are shown in your device’s local time zone.</p>
-              {validTime && !availabilityReady && (
-                <p className="mb-3 text-[13px] text-stone-500" role="status">
-                  Checking availability…
-                </p>
-              )}
-              <button
-                className="primary full"
-                disabled={!validTime || !availabilityReady}
-                onClick={() => {
-                  setSelected('');
-                  setSelectedSeats([]);
-                  setStep('place');
-                }}
-              >
-                Choose a place →
-              </button>
-            </section>
-          ) : !current || !floor ? (
-            <div className="empty">
-              {loaded
-                ? 'No venues found. Sign in to create your first venue.'
-                : publicBooking
-                  ? 'Loading booking…'
-                  : 'Opening your workspace…'}
+              </div>
+            )}
+            <div
+              className={
+                message
+                  ? "notice mb-4 flex items-center gap-2.5 rounded-xl bg-forest-50 px-4 py-3 text-[13px] text-forest-800 ring-1 ring-forest-200/70 before:size-1.5 before:shrink-0 before:rounded-full before:bg-forest-500 before:content-['']"
+                  : 'sr-only'
+              }
+              role="status"
+              aria-live="polite"
+            >
+              {message}
             </div>
-          ) : admin && seatVenue && venueTab === 'events' && !editing ? (
-            <section className="panel venue-panel">
-              <h2 className="px-6 py-5">{current.name}</h2>
-              {venueTabs}
-              <Events
-                venueId={venueId}
-                stadium={current.kind === 'stadium'}
-                revision={eventsRevision}
-                onAdd={() => openShow()}
-                onEdit={openShow}
-                onRemove={removeEvent}
-                onManage={(event) => {
-                  setShows((items) => [...items.filter((show) => show.id !== event.id), event]);
-                  setShowId(event.id);
-                  setManagingSeats(true);
-                  setVenueTab('map');
+            {!admin && tab === 'map' && (publicBooking || step !== 'done') && (
+              <BookingProgress step={step} publicPage={!!publicBooking} />
+            )}
+            {tab === 'overview' && session?.bootstrap && (
+              <p className="mb-4">
+                Replace the shared setup password with your own account.{' '}
+                <button className="text-button" onClick={() => setTab('team')}>
+                  Create first owner
+                </button>
+              </p>
+            )}
+            {tab === 'team' && session?.role === 'owner' ? (
+              <Team bootstrap={session.bootstrap} onChange={refreshSession} />
+            ) : tab === 'overview' && admin ? (
+              <Overview
+                onReservations={showBookings}
+                onEvent={(id, eventId) => {
+                  chooseVenue(id);
+                  setOverviewEvent(eventId);
                 }}
               />
-            </section>
-          ) : (
-            <section
-              className={`panel venue-panel ${admin ? 'operator-venue' : ''} ${editing ? 'layout-editor overflow-clip' : ''}`}
-            >
-              <div
-                className={`flex items-center justify-between gap-4 px-6 py-3 max-lg:flex-wrap max-sm:items-start max-sm:px-4 ${
-                  editing ? 'sticky top-0 z-10 border-b border-stone-100 bg-white' : ''
-                }`}
-              >
-                <div className="flex items-center gap-3.5">
-                  <span className="grid size-11 place-items-center rounded-xl bg-forest-50 text-xl text-forest-700 ring-1 ring-forest-100 max-sm:hidden">
-                    {types[current.kind].icon}
-                  </span>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="max-sm:text-base">{current.name}</h2>
-                      {dirty && (
-                        <span className="pill">
-                          <span
-                            aria-hidden="true"
-                            className="mr-1 inline-block size-1.5 rounded-full bg-amber-500"
-                          />
-                          Unsaved changes
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-stone-500">
-                      {types[current.kind].name} <span className="mx-1 text-stone-300">·</span>{' '}
-                      {current.layout.floors.length}{' '}
-                      {current.layout.floors.length === 1 ? 'floor' : 'floors'}{' '}
-                      <span className="mx-1 text-stone-300">·</span>{' '}
-                      {current.layout.floors.reduce((n, f) => n + f.resources.length, 0)} resources
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {admin && seatVenue && !editing && (
-                    <button
-                      className="secondary"
-                      disabled={!showId}
-                      onClick={() => setManagingSeats(!managingSeats)}
-                    >
-                      {managingSeats ? 'Done managing seats' : 'Manage event seats'}
-                    </button>
-                  )}
-                  {admin && (
-                    <>
-                      {!editing && (
-                        <Menu
-                          label="More venue actions"
-                          items={[
-                            { label: 'Duplicate', onSelect: () => openCreate(current) },
-                            { label: 'Generate with Claude', onSelect: () => setModal('generate') },
-                            { label: 'Share booking link', onSelect: () => shareBooking(false) },
-                            { label: 'Embed', onSelect: () => shareBooking(true) },
-                            {
-                              label: 'Venue settings',
-                              onSelect: () => {
-                                setError('');
-                                setModal('settings');
-                              },
-                            },
-                          ]}
-                        />
-                      )}
-                      {editing ? (
-                        <>
-                          <button
-                            className="secondary"
-                            onClick={() => {
-                              if (!dirty || confirm('Discard unsaved changes?')) {
-                                setEditing(false);
-                                setDirty(false);
-                              }
-                            }}
-                          >
-                            {dirty ? 'Discard changes' : 'Done editing'}
-                          </button>
-                          <button className="primary" disabled={working || !dirty} onClick={save}>
-                            Save layout
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="primary"
-                          onClick={() => {
-                            setDraft(structuredClone(venue!));
-                            setEditing(true);
-                            setView('2d');
-                          }}
-                        >
-                          Edit layout
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-              {venueTabs}
-              {!admin && (
-                <div className="visit-summary flex flex-wrap items-center gap-3 border-t border-stone-100 bg-forest-50/50 px-6 py-3 text-[13px] text-stone-700 max-sm:px-4">
-                  <button className="text-button -ml-2" onClick={() => setStep('time')}>
-                    ← Change time
-                  </button>
-                  <span>
-                    {activeShow?.title}
-                    {interval &&
-                      ` · ${new Date(interval.start).toLocaleString()} – ${new Date(interval.end).toLocaleString()}`}
-                  </span>
-                </div>
-              )}
-              <div
-                className={`${isReview ? 'hidden' : 'flex'} map-toolbar flex-wrap items-center gap-5 border-y border-stone-100 bg-stone-50/60 px-6 py-2.5 max-lg:gap-3 max-lg:px-4 max-sm:px-3`}
-              >
-                <label className="floor-control m-0 flex-row items-center gap-2.5 text-xs text-stone-500">
-                  Floor
-                  <select
-                    aria-label="Floor"
-                    className="w-auto min-w-40 py-1.5 max-sm:max-w-36 max-sm:min-w-28"
-                    value={floorIndex}
-                    onChange={(e) => {
-                      setFloorIndex(Number(e.target.value));
-                      setSelected('');
-                    }}
-                  >
-                    {current.layout.floors.map((f, i) => (
-                      <option key={f.id} value={i}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {current.layout.pricing.mode === 'tiers' && (
-                  <label className="check m-0 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={colourByPrice}
-                      onChange={(event) => setColourByPrice(event.target.checked)}
-                    />
-                    Colour by price
-                  </label>
-                )}
+            ) : tab === 'bookings' ? (
+              <Reservations onMessage={setMessage} onChange={() => setRefresh((n) => n + 1)} />
+            ) : step === 'venues' ? (
+              <section aria-label="Venue directory">
                 <div
-                  className={`legend ml-auto flex min-w-0 flex-wrap gap-4 text-xs text-stone-500 max-lg:gap-2.5 ${priceColors ? '' : 'max-md:hidden'}`}
+                  className="directory-filters mb-6 flex flex-wrap gap-2"
+                  aria-label="Filter venues"
                 >
-                  {priceColors &&
-                    current.layout.pricing.tiers?.map((tier) => {
-                      const assignedResource = current.layout.floors
-                        .flatMap((floor) => floor.resources)
-                        .find((resource) => resource.tierId === tier.id);
-                      const amount =
-                        !editing && assignedResource ? quotedPrice(assignedResource) : tier.amount;
-                      return (
-                        <span
-                          key={tier.id}
-                          className="flex min-w-0 max-w-full items-center gap-1.5 break-all"
-                        >
-                          <i
-                            className="size-2.5 shrink-0 rounded-sm ring-1 ring-stone-300"
-                            style={{ backgroundColor: tier.color }}
-                          />
-                          {tier.name} ·{' '}
-                          {formatPrice(
-                            amount,
-                            editing ? current.layout.pricing.currency : currency,
-                          )}
-                        </span>
-                      );
-                    })}
-                  {(
-                    [
-                      ['Available', 'bg-[#d6e2d3] ring-[#9fb49b]'],
-                      ['Reserved', 'bg-[#ecd6c4] ring-[#c4a185]'],
-                      ['Selected', 'bg-sprout-300 ring-sprout-500'],
-                      ['Blocked', 'bg-[#c3c9d0] ring-[#8c96a3]'],
-                    ] as const
-                  ).map(([label, swatch]) => (
-                    <span key={label} className="flex items-center gap-1.5">
-                      <i className={`size-2.5 rounded-[3px] ring-1 ring-inset ${swatch}`} />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-                <div className="view-toggle flex rounded-lg bg-stone-200/60 p-0.5 max-md:ml-auto">
-                  {(['2d', '3d'] as const).map((v) => (
+                  {(['all', 'restaurant', 'parking', 'cinema', 'stadium'] as const).map((type) => (
                     <button
-                      key={v}
-                      className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                        view === v ? 'bg-white text-ink shadow-sm' : 'text-stone-500 hover:text-ink'
-                      }`}
-                      aria-label={v === '2d' ? '2D view' : '3D view'}
-                      aria-pressed={view === v}
-                      onClick={() => setView(v)}
+                      key={type}
+                      className={`${filter === type ? 'primary' : 'secondary'} rounded-full`}
+                      aria-pressed={filter === type}
+                      onClick={() => setFilter(type)}
                     >
-                      {v === '2d' ? (
-                        <>
-                          <Map
-                            className="size-4 inline-block shrink-0"
-                            aria-hidden="true"
-                            strokeWidth={1.75}
-                          />{' '}
-                          2D
-                        </>
-                      ) : (
-                        <>
-                          <Box
-                            className="size-4 inline-block shrink-0"
-                            aria-hidden="true"
-                            strokeWidth={1.75}
-                          />{' '}
-                          3D
-                        </>
-                      )}
+                      {type === 'all' ? 'All venues' : types[type].name}
                     </button>
                   ))}
                 </div>
-              </div>
-              <div
-                className={`map-body ${isReview ? 'block' : 'flex items-stretch max-lg:flex-col'} ${
-                  admin
-                    ? 'lg:h-[calc(100dvh-240px)] lg:min-h-[480px]'
-                    : editing
-                      ? 'lg:h-[clamp(520px,70vh,780px)]'
-                      : ''
-                }`}
-              >
-                <div
-                  className={`map-column ${isReview ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col`}
-                >
-                  {view === '2d' ? (
-                    <Map2D
-                      key={floor.id}
-                      floor={floor}
-                      kind={current.kind}
-                      selected={selected}
-                      selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
-                      busy={busy}
-                      blocked={blocked}
-                      editing={editing && !painting}
-                      priceColors={priceColors}
-                      onSelect={selectPlace}
-                      onMove={moveResource}
-                    />
-                  ) : (
-                    <SceneBoundary key={floor.id}>
-                      <Suspense fallback={<div className="empty">Preparing your 3D space…</div>}>
-                        <Map3D
-                          key={floor.id}
-                          floor={floor}
-                          kind={current.kind}
-                          selected={selected}
-                          selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
-                          busy={busy}
-                          blocked={blocked}
-                          onSelect={selectPlace}
-                          editing={editing && !painting}
-                          priceColors={priceColors}
-                          onMove={moveResource}
-                        />
-                      </Suspense>
-                    </SceneBoundary>
-                  )}
-                  <div className="map-footer flex items-center justify-between gap-3 border-t border-stone-100 bg-white px-5 py-3 text-xs text-stone-500">
-                    <span className="flex items-center gap-2 font-medium text-stone-700">
-                      <i className="live-dot" />
-                      {editing
-                        ? 'Editing layout'
-                        : availabilityReady
-                          ? `${floor.resources.filter((r) => !busy.includes(r.id)).length} of ${floor.resources.length} available`
-                          : 'Choose a valid time to check availability'}
-                    </span>
-                    <span className="max-sm:hidden">
-                      {editing
-                        ? dirty
-                          ? 'Save to publish edits'
-                          : 'Layout is up to date'
-                        : 'Availability refreshes every 15 seconds'}
-                    </span>
-                  </div>
-                </div>
-                <aside className={`inspector shrink-0 bg-white ${inspectorWidth}`}>
-                  {editing ? (
-                    <LayoutInspector
-                      paintTier={painting ? paintTier : null}
-                      onPaintTier={(id) => {
-                        setPaintTier(id);
-                        setSelected('');
-                        if (id !== null) setColourByPrice(true);
-                      }}
-                      scope={selectionScope}
-                      onScope={setSelectionScope}
-                      view={view}
-                      draft={draft!}
-                      floor={floor}
-                      floorIndex={floorIndex}
-                      resource={resource}
-                      selected={selected}
-                      updateLayout={updateLayout}
-                      setFloorIndex={setFloorIndex}
-                      setSelected={setSelected}
-                      updateResource={updateResource}
-                      addResource={addResource}
-                      exportLayout={exportLayout}
-                      importLayout={importLayout}
-                    />
-                  ) : managingSeats && admin && showId ? (
-                    <>
-                      {timeFields}
-                      <EventPricingCard
-                        key={venueId + showId}
-                        venueId={venueId}
-                        showId={showId}
-                        layout={current.layout}
-                        run={run}
-                        working={working}
-                        onChanged={(text) => {
-                          setMessage(text);
-                          setRefresh((value) => value + 1);
-                        }}
-                      />
-                      <EventSeatControls
-                        key={venueId + showId + floor.id}
-                        venueId={venueId}
-                        showId={showId}
-                        floor={floor}
-                        selectedIds={managedIds}
-                        blockedIds={blocked}
-                        scope={selectionScope}
-                        onScope={setSelectionScope}
-                        onClear={() => setManagedIds([])}
-                        run={run}
-                        working={working}
-                        onChanged={(text) => {
-                          setMessage(text);
-                          setRefresh((v) => v + 1);
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <div className="eyebrow">
-                        {step === 'review' ? 'FINAL STEP' : 'SELECT YOUR PLACE'}
-                      </div>
-                      <h3>
-                        {step === 'review' ? 'Review your reservation' : 'Choose an available spot'}
-                      </h3>
-                      <p className="muted">
-                        {step === 'review'
-                          ? 'Check your selection and enter the name for your reservation.'
-                          : 'Explore the map or choose from the list below.'}
-                      </p>
-                      {admin && timeFields}
-                      {!admin && step === 'review' && (
-                        <p className="text-[13px] text-stone-600">
-                          <strong className="font-semibold text-ink">{floor.name}</strong>
-                          <br />
-                          {activeShow?.title}
-                        </p>
-                      )}
-                      <div
-                        className={`selection-card my-5 flex flex-col items-center rounded-xl border border-dashed px-4 py-5 text-center transition ${
-                          bookingResources.length
-                            ? 'has-selection border-sprout-500/60 bg-sprout-100/60'
-                            : 'border-stone-200 bg-stone-50'
-                        }`}
+                <div className="venue-directory grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-6">
+                  {venues
+                    .filter((v) => !v.archivedAt && (filter === 'all' || v.kind === filter))
+                    .map((v) => (
+                      <article
+                        className="panel directory-card flex flex-col transition duration-200 hover:-translate-y-0.5 hover:shadow-float"
+                        key={v.id}
                       >
-                        <span
-                          className={`mb-2 text-2xl ${bookingResources.length ? 'text-forest-600' : 'text-stone-400'}`}
-                        >
-                          {resource ? (
-                            types[current.kind].icon
-                          ) : (
-                            <MapPin
-                              className="size-4 inline-block shrink-0"
-                              aria-hidden="true"
-                              strokeWidth={1.75}
-                            />
+                        <LayoutThumbnail venue={v} />
+                        <div className="directory-details flex flex-1 flex-col p-6">
+                          <div className="eyebrow">{types[v.kind].name}</div>
+                          <h2 className="mt-2 mb-1">{v.name}</h2>
+                          <p className="mb-6 text-[13px] text-stone-500">
+                            {v.layout.floors.reduce((n, f) => n + f.resources.length, 0)}{' '}
+                            {v.kind === 'restaurant'
+                              ? 'tables'
+                              : v.kind === 'parking'
+                                ? 'parking spaces'
+                                : 'seats'}{' '}
+                            · {v.layout.floors.length}{' '}
+                            {v.layout.floors.length === 1 ? 'floor' : 'floors'}
+                          </p>
+                          {['cinema', 'stadium'].includes(v.kind) && v.nextEventAt && (
+                            <p className="mb-4 text-[13px] text-stone-500">
+                              Next event ·{' '}
+                              <time dateTime={v.nextEventAt}>
+                                {new Date(v.nextEventAt).toLocaleString()}
+                              </time>
+                            </p>
                           )}
-                        </span>
-                        <strong
-                          className={`text-[13px] font-semibold ${bookingResources.length ? 'text-forest-900' : 'text-stone-600'}`}
-                        >
-                          {bookingResources.length
-                            ? bookingResources.map((r) => seatLocation(r)).join(', ')
-                            : 'Your spot is waiting'}
-                        </strong>
-                        <small className="mt-1 text-xs text-stone-500">
-                          {seatVenue
-                            ? `${bookingResources.length} seats selected`
-                            : resource
-                              ? `${resource.kind === 'table' ? `${resource.capacity} guests` : '1 place'}${resource.accessible ? ' · Accessible' : ''}${resource.ev ? ' · EV charging' : ''}`
-                              : 'Select a resource on the map'}
-                        </small>
-                        {resource && busy.includes(resource.id) && (
-                          <span className="mt-2 text-xs font-medium text-amber-700">
-                            Reserved for this time
+                          <button
+                            className="primary full mt-auto h-auto min-h-9 py-2 text-left whitespace-normal"
+                            onClick={() => chooseVenue(v.id)}
+                          >
+                            {admin ? 'Manage' : 'Book'} {v.name} →
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+                {loaded && !activeVenues.some((v) => filter === 'all' || v.kind === filter) && (
+                  <p className="empty">No venues in this category yet.</p>
+                )}
+                {!loaded && <p className="empty">Loading venues…</p>}
+              </section>
+            ) : step === 'done' && confirmation ? (
+              <BookingConfirmation confirmation={confirmation} venue={venue} onAgain={directory} />
+            ) : !admin && step === 'time' && venue ? (
+              <section className="panel journey-panel mx-auto max-w-[640px] p-8 max-sm:p-6 [&_label]:my-5">
+                {!publicBooking && (
+                  <button className="text-button -ml-2" onClick={directory}>
+                    ← All venues
+                  </button>
+                )}
+                <div className="eyebrow mt-4">{types[venue.kind].name}</div>
+                <h2 className="mt-2 mb-2 text-[26px]">{venue.name}</h2>
+                <p className="leading-relaxed text-stone-600">
+                  {seatVenue
+                    ? 'Choose your screening before selecting a seat.'
+                    : 'When will you visit? Availability is checked for the whole stay.'}
+                </p>
+                {timeFields}
+                {interval && !validTime && !seatVenue && (
+                  <p className="field-error">Choose an arrival time in the future.</p>
+                )}
+                <p className="muted">Times are shown in your device’s local time zone.</p>
+                {validTime && !availabilityReady && (
+                  <p className="mb-3 text-[13px] text-stone-500" role="status">
+                    Checking availability…
+                  </p>
+                )}
+                <button
+                  className="primary full"
+                  disabled={!validTime || !availabilityReady}
+                  onClick={() => {
+                    setSelected('');
+                    setSelectedSeats([]);
+                    setStep('place');
+                  }}
+                >
+                  Choose a place →
+                </button>
+              </section>
+            ) : !current || !floor ? (
+              <div className="empty">
+                {loaded
+                  ? 'No venues found. Sign in to create your first venue.'
+                  : publicBooking
+                    ? 'Loading booking…'
+                    : 'Opening your workspace…'}
+              </div>
+            ) : admin && seatVenue && venueTab === 'events' && !editing ? (
+              <section className="panel venue-panel">
+                <h2 className="px-6 py-5">{current.name}</h2>
+                {venueTabs}
+                <Events
+                  venueId={venueId}
+                  stadium={current.kind === 'stadium'}
+                  revision={eventsRevision}
+                  onAdd={() => openShow()}
+                  onEdit={openShow}
+                  onRemove={removeEvent}
+                  onManage={(event) => {
+                    setShows((items) => [...items.filter((show) => show.id !== event.id), event]);
+                    setShowId(event.id);
+                    setManagingSeats(true);
+                    setVenueTab('map');
+                  }}
+                />
+              </section>
+            ) : (
+              <section
+                className={`panel venue-panel ${admin ? 'operator-venue' : ''} ${editing ? 'layout-editor overflow-clip' : ''}`}
+              >
+                <div
+                  className={`flex items-center justify-between gap-4 px-6 py-3 max-lg:flex-wrap max-sm:items-start max-sm:px-4 ${
+                    editing ? 'sticky top-0 z-10 border-b border-stone-100 bg-white' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <span className="grid size-11 place-items-center rounded-xl bg-forest-50 text-xl text-forest-700 ring-1 ring-forest-100 max-sm:hidden">
+                      {types[current.kind].icon}
+                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="max-sm:text-base">{current.name}</h2>
+                        {dirty && (
+                          <span className="pill">
+                            <span
+                              aria-hidden="true"
+                              className="mr-1 inline-block size-1.5 rounded-full bg-amber-500"
+                            />
+                            Unsaved changes
                           </span>
                         )}
                       </div>
-                      {seatVenue && bookingResources.some((r) => busy.includes(r.id)) && (
-                        <p className="field-error">
-                          A selected seat is no longer available. Remove it and choose another.
-                        </p>
-                      )}
-                      {seatVenue && step !== 'review' && bookingResources.length > 0 && (
-                        <div className="mb-3 flex flex-wrap gap-1.5">
-                          {bookingResources.map((r) => (
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {types[current.kind].name} <span className="mx-1 text-stone-300">·</span>{' '}
+                        {current.layout.floors.length}{' '}
+                        {current.layout.floors.length === 1 ? 'floor' : 'floors'}{' '}
+                        <span className="mx-1 text-stone-300">·</span>{' '}
+                        {current.layout.floors.reduce((n, f) => n + f.resources.length, 0)}{' '}
+                        resources
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {admin && seatVenue && !editing && (
+                      <button
+                        className="secondary"
+                        disabled={!showId}
+                        onClick={() => setManagingSeats(!managingSeats)}
+                      >
+                        {managingSeats ? 'Done managing seats' : 'Manage event seats'}
+                      </button>
+                    )}
+                    {admin && (
+                      <>
+                        {!editing && (
+                          <Menu
+                            label="More venue actions"
+                            items={[
+                              { label: 'Duplicate', onSelect: () => openCreate(current) },
+                              {
+                                label: 'Generate with Claude',
+                                onSelect: () => setModal('generate'),
+                              },
+                              { label: 'Share booking link', onSelect: () => shareBooking(false) },
+                              { label: 'Embed', onSelect: () => shareBooking(true) },
+                              {
+                                label: 'Venue settings',
+                                onSelect: () => {
+                                  setError('');
+                                  setModal('settings');
+                                },
+                              },
+                            ]}
+                          />
+                        )}
+                        {editing ? (
+                          <>
                             <button
-                              className="secondary h-7 rounded-full px-2.5 text-xs"
-                              key={r.id}
-                              onClick={() => selectPlace(r.id)}
-                              aria-label={`Remove ${r.label}`}
+                              className="secondary"
+                              onClick={() => {
+                                if (!dirty || confirm('Discard unsaved changes?')) {
+                                  setEditing(false);
+                                  setDirty(false);
+                                }
+                              }}
                             >
-                              {seatLocation(r)}{' '}
-                              <X
+                              {dirty ? 'Discard changes' : 'Done editing'}
+                            </button>
+                            <button className="primary" disabled={working || !dirty} onClick={save}>
+                              Save layout
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="primary"
+                            onClick={() => {
+                              setDraft(structuredClone(venue!));
+                              setEditing(true);
+                              setView('2d');
+                            }}
+                          >
+                            Edit layout
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                {venueTabs}
+                {!admin && (
+                  <div className="visit-summary flex flex-wrap items-center gap-3 border-t border-stone-100 bg-forest-50/50 px-6 py-3 text-[13px] text-stone-700 max-sm:px-4">
+                    <button className="text-button -ml-2" onClick={() => setStep('time')}>
+                      ← Change time
+                    </button>
+                    <span>
+                      {activeShow?.title}
+                      {interval &&
+                        ` · ${new Date(interval.start).toLocaleString()} – ${new Date(interval.end).toLocaleString()}`}
+                    </span>
+                  </div>
+                )}
+                <div
+                  className={`${isReview ? 'hidden' : 'flex'} map-toolbar flex-wrap items-center gap-5 border-y border-stone-100 bg-stone-50/60 px-6 py-2.5 max-lg:gap-3 max-lg:px-4 max-sm:px-3`}
+                >
+                  <label className="floor-control m-0 flex-row items-center gap-2.5 text-xs text-stone-500">
+                    Floor
+                    <select
+                      aria-label="Floor"
+                      className="w-auto min-w-40 py-1.5 max-sm:max-w-36 max-sm:min-w-28"
+                      value={floorIndex}
+                      onChange={(e) => {
+                        setFloorIndex(Number(e.target.value));
+                        setSelected('');
+                      }}
+                    >
+                      {current.layout.floors.map((f, i) => (
+                        <option key={f.id} value={i}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {current.layout.pricing.mode === 'tiers' && (
+                    <label className="check m-0 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={colourByPrice}
+                        onChange={(event) => setColourByPrice(event.target.checked)}
+                      />
+                      Colour by price
+                    </label>
+                  )}
+                  <div
+                    className={`legend ml-auto flex min-w-0 flex-wrap gap-4 text-xs text-stone-500 max-lg:gap-2.5 ${priceColors ? '' : 'max-md:hidden'}`}
+                  >
+                    {priceColors &&
+                      current.layout.pricing.tiers?.map((tier) => {
+                        const assignedResource = current.layout.floors
+                          .flatMap((floor) => floor.resources)
+                          .find((resource) => resource.tierId === tier.id);
+                        const amount =
+                          !editing && assignedResource
+                            ? quotedPrice(assignedResource)
+                            : tier.amount;
+                        return (
+                          <span
+                            key={tier.id}
+                            className="flex min-w-0 max-w-full items-center gap-1.5 break-all"
+                          >
+                            <i
+                              className="size-2.5 shrink-0 rounded-sm ring-1 ring-stone-300"
+                              style={{ backgroundColor: tier.color }}
+                            />
+                            {tier.name} ·{' '}
+                            {formatPrice(
+                              amount,
+                              editing ? current.layout.pricing.currency : currency,
+                            )}
+                          </span>
+                        );
+                      })}
+                    {(
+                      [
+                        ['Available', 'bg-[#d6e2d3] ring-[#9fb49b]'],
+                        ['Reserved', 'bg-[#ecd6c4] ring-[#c4a185]'],
+                        ['Selected', 'bg-sprout-300 ring-sprout-500'],
+                        ['Blocked', 'bg-[#c3c9d0] ring-[#8c96a3]'],
+                      ] as const
+                    ).map(([label, swatch]) => (
+                      <span key={label} className="flex items-center gap-1.5">
+                        <i className={`size-2.5 rounded-[3px] ring-1 ring-inset ${swatch}`} />
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="view-toggle flex rounded-lg bg-stone-200/60 p-0.5 max-md:ml-auto">
+                    {(['2d', '3d'] as const).map((v) => (
+                      <button
+                        key={v}
+                        className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                          view === v
+                            ? 'bg-white text-ink shadow-sm'
+                            : 'text-stone-500 hover:text-ink'
+                        }`}
+                        aria-label={v === '2d' ? '2D view' : '3D view'}
+                        aria-pressed={view === v}
+                        onClick={() => setView(v)}
+                      >
+                        {v === '2d' ? (
+                          <>
+                            <Map
+                              className="size-4 inline-block shrink-0"
+                              aria-hidden="true"
+                              strokeWidth={1.75}
+                            />{' '}
+                            2D
+                          </>
+                        ) : (
+                          <>
+                            <Box
+                              className="size-4 inline-block shrink-0"
+                              aria-hidden="true"
+                              strokeWidth={1.75}
+                            />{' '}
+                            3D
+                          </>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div
+                  className={`map-body ${isReview ? 'block' : 'flex items-stretch max-lg:flex-col'} ${
+                    admin
+                      ? 'lg:h-[calc(100dvh-240px)] lg:min-h-[480px]'
+                      : editing
+                        ? 'lg:h-[clamp(520px,70vh,780px)]'
+                        : ''
+                  }`}
+                >
+                  <div
+                    className={`map-column ${isReview ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col`}
+                  >
+                    {view === '2d' ? (
+                      <Map2D
+                        key={floor.id}
+                        floor={floor}
+                        kind={current.kind}
+                        selected={selected}
+                        selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
+                        busy={busy}
+                        blocked={blocked}
+                        editing={editing && !painting}
+                        priceColors={priceColors}
+                        onSelect={selectPlace}
+                        onMove={moveResource}
+                      />
+                    ) : (
+                      <SceneBoundary key={floor.id}>
+                        <Suspense fallback={<div className="empty">Preparing your 3D space…</div>}>
+                          <Map3D
+                            key={floor.id}
+                            floor={floor}
+                            kind={current.kind}
+                            selected={selected}
+                            selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
+                            busy={busy}
+                            blocked={blocked}
+                            onSelect={selectPlace}
+                            editing={editing && !painting}
+                            priceColors={priceColors}
+                            onMove={moveResource}
+                          />
+                        </Suspense>
+                      </SceneBoundary>
+                    )}
+                    <div className="map-footer flex items-center justify-between gap-3 border-t border-stone-100 bg-white px-5 py-3 text-xs text-stone-500">
+                      <span className="flex items-center gap-2 font-medium text-stone-700">
+                        <i className="live-dot" />
+                        {editing
+                          ? 'Editing layout'
+                          : availabilityReady
+                            ? `${floor.resources.filter((r) => !busy.includes(r.id)).length} of ${floor.resources.length} available`
+                            : 'Choose a valid time to check availability'}
+                      </span>
+                      <span className="max-sm:hidden">
+                        {editing
+                          ? dirty
+                            ? 'Save to publish edits'
+                            : 'Layout is up to date'
+                          : 'Availability refreshes every 15 seconds'}
+                      </span>
+                    </div>
+                  </div>
+                  <aside className={`inspector shrink-0 bg-white ${inspectorWidth}`}>
+                    {editing ? (
+                      <LayoutInspector
+                        paintTier={painting ? paintTier : null}
+                        onPaintTier={(id) => {
+                          setPaintTier(id);
+                          setSelected('');
+                          if (id !== null) setColourByPrice(true);
+                        }}
+                        scope={selectionScope}
+                        onScope={setSelectionScope}
+                        view={view}
+                        draft={draft!}
+                        floor={floor}
+                        floorIndex={floorIndex}
+                        resource={resource}
+                        selected={selected}
+                        updateLayout={updateLayout}
+                        setFloorIndex={setFloorIndex}
+                        setSelected={setSelected}
+                        updateResource={updateResource}
+                        addResource={addResource}
+                        exportLayout={exportLayout}
+                        importLayout={importLayout}
+                      />
+                    ) : managingSeats && admin && showId ? (
+                      <>
+                        {timeFields}
+                        <EventPricingCard
+                          key={venueId + showId}
+                          venueId={venueId}
+                          showId={showId}
+                          layout={current.layout}
+                          run={run}
+                          working={working}
+                          onChanged={(text) => {
+                            setMessage(text);
+                            setRefresh((value) => value + 1);
+                          }}
+                        />
+                        <EventSeatControls
+                          key={venueId + showId + floor.id}
+                          venueId={venueId}
+                          showId={showId}
+                          floor={floor}
+                          selectedIds={managedIds}
+                          blockedIds={blocked}
+                          scope={selectionScope}
+                          onScope={setSelectionScope}
+                          onClear={() => setManagedIds([])}
+                          run={run}
+                          working={working}
+                          onChanged={(text) => {
+                            setMessage(text);
+                            setRefresh((v) => v + 1);
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div className="eyebrow">
+                          {step === 'review' ? 'FINAL STEP' : 'SELECT YOUR PLACE'}
+                        </div>
+                        <h3>
+                          {step === 'review'
+                            ? 'Review your reservation'
+                            : 'Choose an available spot'}
+                        </h3>
+                        <p className="muted">
+                          {step === 'review'
+                            ? 'Check your selection and enter the name for your reservation.'
+                            : 'Explore the map or choose from the list below.'}
+                        </p>
+                        {admin && timeFields}
+                        {!admin && step === 'review' && (
+                          <p className="text-[13px] text-stone-600">
+                            <strong className="font-semibold text-ink">{floor.name}</strong>
+                            <br />
+                            {activeShow?.title}
+                          </p>
+                        )}
+                        <div
+                          className={`selection-card my-5 flex flex-col items-center rounded-xl border border-dashed px-4 py-5 text-center transition ${
+                            bookingResources.length
+                              ? 'has-selection border-sprout-500/60 bg-sprout-100/60'
+                              : 'border-stone-200 bg-stone-50'
+                          }`}
+                        >
+                          <span
+                            className={`mb-2 text-2xl ${bookingResources.length ? 'text-forest-600' : 'text-stone-400'}`}
+                          >
+                            {resource ? (
+                              types[current.kind].icon
+                            ) : (
+                              <MapPin
                                 className="size-4 inline-block shrink-0"
                                 aria-hidden="true"
                                 strokeWidth={1.75}
                               />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {seatVenue && (
-                        <p className="my-3 text-[13px] text-stone-600">
-                          {selectedSeats.length} of {partySize} seats selected. Select a chosen seat
-                          again to remove it.
-                        </p>
-                      )}
-                      {!seatVenue && venue?.kind === 'restaurant' && (
-                        <p className="my-3 text-[13px] text-stone-600">
-                          {partySize} {partySize === 1 ? 'guest' : 'guests'} · Choose a table with
-                          enough seats.
-                        </p>
-                      )}
-                      {!seatVenue && resource && resource.capacity < partySize && (
-                        <p className="field-error">
-                          This table seats {resource.capacity}. Choose a larger table or change your
-                          party size.
-                        </p>
-                      )}
-                      {bookingResources.length > 0 && (
-                        <div
-                          className="price-summary my-4 rounded-xl bg-stone-50 p-4 text-[13px] ring-1 ring-stone-100"
-                          aria-label="Reservation price summary"
-                        >
-                          {bookingResources.map((r) => (
-                            <p
-                              key={r.id}
-                              className="flex justify-between gap-4 py-0.5 text-stone-600"
-                            >
-                              {seatLocation(r)}
-                              <strong className="font-medium text-ink tabular-nums">
-                                {formatPrice(quotedPrice(r), currency)}
-                              </strong>
-                            </p>
-                          ))}
-                          <p className="mt-2 flex items-baseline justify-between gap-4 border-t border-stone-200 pt-2.5 font-semibold text-ink">
-                            Total
-                            <strong className="font-display text-base tabular-nums">
-                              {formatPrice(total, currency)}
-                            </strong>
-                          </p>
-                          <small className="mt-2 text-xs leading-normal text-stone-500">
-                            For the entire reservation. Payment is not collected here.
+                            )}
+                          </span>
+                          <strong
+                            className={`text-[13px] font-semibold ${bookingResources.length ? 'text-forest-900' : 'text-stone-600'}`}
+                          >
+                            {bookingResources.length
+                              ? bookingResources.map((r) => seatLocation(r)).join(', ')
+                              : 'Your spot is waiting'}
+                          </strong>
+                          <small className="mt-1 text-xs text-stone-500">
+                            {seatVenue
+                              ? `${bookingResources.length} seats selected`
+                              : resource
+                                ? `${resource.kind === 'table' ? `${resource.capacity} guests` : '1 place'}${resource.accessible ? ' · Accessible' : ''}${resource.ev ? ' · EV charging' : ''}`
+                                : 'Select a resource on the map'}
                           </small>
-                        </div>
-                      )}
-                      {(admin || step !== 'review') && (view === '3d' || !admin) && (
-                        <label>
-                          Resource
-                          <select
-                            value={
-                              seatVenue
-                                ? (selectedSeats
-                                    .filter((id) => floor.resources.some((r) => r.id === id))
-                                    .at(-1) ?? '')
-                                : selected
-                            }
-                            onChange={(e) => selectPlace(e.target.value)}
-                          >
-                            <option value="">Select a resource</option>
-                            {floor.resources.map((r) => (
-                              <option
-                                key={r.id}
-                                value={r.id}
-                                disabled={
-                                  busy.includes(r.id) || (!seatVenue && r.capacity < partySize)
-                                }
-                              >
-                                {seatLocation(r)}
-
-                                {selectedSeats.includes(r.id) ? ' · Selected' : ''}
-                                {venue?.layout.pricing.mode !== 'free'
-                                  ? ` · ${formatPrice(quotedPrice(r), currency)}`
-                                  : ''}
-                                {busy.includes(r.id)
-                                  ? blocked.includes(r.id)
-                                    ? ' · Blocked'
-                                    : ' · Reserved'
-                                  : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {!admin && step === 'place' ? (
-                        <button
-                          className="primary full h-10"
-                          disabled={!canReserve}
-                          onClick={() => setStep('review')}
-                        >
-                          Review reservation →
-                        </button>
-                      ) : (
-                        <>
-                          {!admin && (
-                            <button
-                              className="text-button -ml-2 mb-2"
-                              onClick={() => setStep('place')}
-                            >
-                              ← Change place
-                            </button>
+                          {resource && busy.includes(resource.id) && (
+                            <span className="mt-2 text-xs font-medium text-amber-700">
+                              Reserved for this time
+                            </span>
                           )}
-                          <form
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              void reserve();
-                            }}
-                          >
-                            <label>
-                              Guest name
-                              <input
-                                autoComplete="name"
-                                value={guest}
-                                maxLength={100}
-                                required
-                                onChange={(e) => setGuest(e.target.value)}
-                                placeholder="Who are we expecting?"
-                              />
-                            </label>
-                            <label>
-                              Email (optional)
-                              <input
-                                type="email"
-                                autoComplete="email"
-                                maxLength={254}
-                                value={guestEmail}
-                                onChange={(e) => setGuestEmail(e.target.value)}
-                              />
-                            </label>
-                            <label>
-                              Phone (optional)
-                              <input
-                                type="tel"
-                                autoComplete="tel"
-                                maxLength={40}
-                                value={guestPhone}
-                                onChange={(e) => setGuestPhone(e.target.value)}
-                              />
-                            </label>
-                            <button className="primary full h-10" disabled={working || !canReserve}>
-                              Confirm reservation{' '}
-                              <span>
-                                <ArrowUpRight
+                        </div>
+                        {seatVenue && bookingResources.some((r) => busy.includes(r.id)) && (
+                          <p className="field-error">
+                            A selected seat is no longer available. Remove it and choose another.
+                          </p>
+                        )}
+                        {seatVenue && step !== 'review' && bookingResources.length > 0 && (
+                          <div className="mb-3 flex flex-wrap gap-1.5">
+                            {bookingResources.map((r) => (
+                              <button
+                                className="secondary h-7 rounded-full px-2.5 text-xs"
+                                key={r.id}
+                                onClick={() => selectPlace(r.id)}
+                                aria-label={`Remove ${r.label}`}
+                              >
+                                {seatLocation(r)}{' '}
+                                <X
                                   className="size-4 inline-block shrink-0"
                                   aria-hidden="true"
                                   strokeWidth={1.75}
                                 />
-                              </span>
-                            </button>
-                          </form>
-                        </>
-                      )}
-                      <p className="privacy-note mt-3 text-center text-xs leading-relaxed text-stone-400">
-                        Your details are visible only to the venue administrator.
-                      </p>
-                    </>
-                  )}
-                </aside>
-              </div>
-            </section>
-          )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {seatVenue && (
+                          <p className="my-3 text-[13px] text-stone-600">
+                            {selectedSeats.length} of {partySize} seats selected. Select a chosen
+                            seat again to remove it.
+                          </p>
+                        )}
+                        {!seatVenue && venue?.kind === 'restaurant' && (
+                          <p className="my-3 text-[13px] text-stone-600">
+                            {partySize} {partySize === 1 ? 'guest' : 'guests'} · Choose a table with
+                            enough seats.
+                          </p>
+                        )}
+                        {!seatVenue && resource && resource.capacity < partySize && (
+                          <p className="field-error">
+                            This table seats {resource.capacity}. Choose a larger table or change
+                            your party size.
+                          </p>
+                        )}
+                        {bookingResources.length > 0 && (
+                          <div
+                            className="price-summary my-4 rounded-xl bg-stone-50 p-4 text-[13px] ring-1 ring-stone-100"
+                            aria-label="Reservation price summary"
+                          >
+                            {bookingResources.map((r) => (
+                              <p
+                                key={r.id}
+                                className="flex justify-between gap-4 py-0.5 text-stone-600"
+                              >
+                                {seatLocation(r)}
+                                <strong className="font-medium text-ink tabular-nums">
+                                  {formatPrice(quotedPrice(r), currency)}
+                                </strong>
+                              </p>
+                            ))}
+                            <p className="mt-2 flex items-baseline justify-between gap-4 border-t border-stone-200 pt-2.5 font-semibold text-ink">
+                              Total
+                              <strong className="font-display text-base tabular-nums">
+                                {formatPrice(total, currency)}
+                              </strong>
+                            </p>
+                            <small className="mt-2 text-xs leading-normal text-stone-500">
+                              For the entire reservation. Payment is not collected here.
+                            </small>
+                          </div>
+                        )}
+                        {(admin || step !== 'review') && (view === '3d' || !admin) && (
+                          <label>
+                            Resource
+                            <select
+                              value={
+                                seatVenue
+                                  ? (selectedSeats
+                                      .filter((id) => floor.resources.some((r) => r.id === id))
+                                      .at(-1) ?? '')
+                                  : selected
+                              }
+                              onChange={(e) => selectPlace(e.target.value)}
+                            >
+                              <option value="">Select a resource</option>
+                              {floor.resources.map((r) => (
+                                <option
+                                  key={r.id}
+                                  value={r.id}
+                                  disabled={
+                                    busy.includes(r.id) || (!seatVenue && r.capacity < partySize)
+                                  }
+                                >
+                                  {seatLocation(r)}
+
+                                  {selectedSeats.includes(r.id) ? ' · Selected' : ''}
+                                  {venue?.layout.pricing.mode !== 'free'
+                                    ? ` · ${formatPrice(quotedPrice(r), currency)}`
+                                    : ''}
+                                  {busy.includes(r.id)
+                                    ? blocked.includes(r.id)
+                                      ? ' · Blocked'
+                                      : ' · Reserved'
+                                    : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        {!admin && step === 'place' ? (
+                          <button
+                            className="primary full h-10"
+                            disabled={!canReserve}
+                            onClick={() => setStep('review')}
+                          >
+                            Review reservation →
+                          </button>
+                        ) : (
+                          <>
+                            {!admin && (
+                              <button
+                                className="text-button -ml-2 mb-2"
+                                onClick={() => setStep('place')}
+                              >
+                                ← Change place
+                              </button>
+                            )}
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                void reserve();
+                              }}
+                            >
+                              <label>
+                                Guest name
+                                <input
+                                  autoComplete="name"
+                                  value={guest}
+                                  maxLength={100}
+                                  required
+                                  onChange={(e) => setGuest(e.target.value)}
+                                  placeholder="Who are we expecting?"
+                                />
+                              </label>
+                              <label>
+                                Email (optional)
+                                <input
+                                  type="email"
+                                  autoComplete="email"
+                                  maxLength={254}
+                                  value={guestEmail}
+                                  onChange={(e) => setGuestEmail(e.target.value)}
+                                />
+                              </label>
+                              <label>
+                                Phone (optional)
+                                <input
+                                  type="tel"
+                                  autoComplete="tel"
+                                  maxLength={40}
+                                  value={guestPhone}
+                                  onChange={(e) => setGuestPhone(e.target.value)}
+                                />
+                              </label>
+                              <button
+                                className="primary full h-10"
+                                disabled={working || !canReserve}
+                              >
+                                Confirm reservation{' '}
+                                <span>
+                                  <ArrowUpRight
+                                    className="size-4 inline-block shrink-0"
+                                    aria-hidden="true"
+                                    strokeWidth={1.75}
+                                  />
+                                </span>
+                              </button>
+                            </form>
+                          </>
+                        )}
+                        <p className="privacy-note mt-3 text-center text-xs leading-relaxed text-stone-400">
+                          Your details are visible only to the venue administrator.
+                        </p>
+                      </>
+                    )}
+                  </aside>
+                </div>
+              </section>
+            )}
+          </BookingDialog>
           {!admin && !publicBooking?.embed && (
             <footer className="page-footer mt-6 flex justify-between gap-3 text-xs text-stone-400">
               <span>Thoughtfully mapped. Effortlessly reserved.</span>

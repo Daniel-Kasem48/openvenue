@@ -74,6 +74,7 @@ test('parking and cinema templates have independent layouts and show controls', 
   await expect(page.getByLabel('Floor', { exact: true })).toHaveValue('0');
   await page.getByLabel('Floor', { exact: true }).selectOption('1');
   await expect(page.getByRole('button', { name: 'Select P2-01', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close booking', exact: true }).click();
   await page
     .locator('.venue-list')
     .getByRole('button', { name: /Studio Cinema/ })

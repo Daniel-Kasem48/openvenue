@@ -327,3 +327,7 @@ Passwords use asynchronous salted scrypt; session tokens are stored as hashes. M
 adds accounts, session ownership and an audit log. Layout saves, price changes and cancellations
 record the acting user in the same transaction; a failed audit write rolls back the action.
 Bootstrap actions have a null user ID. Disabling accounts retains their audit attribution.
+
+Guest booking opens in dialogs: time, a wide interactive 3D seat selector, review and confirmation.
+Close or Escape keeps the current details; Continue booking reopens the flow. Closing is disabled
+while a reservation is being submitted.
