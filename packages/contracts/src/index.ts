@@ -249,3 +249,55 @@ export function seatRows(floor: Floor) {
   }
   return [...groups.values()];
 }
+
+export const overviewRangeSchema = z
+  .object({
+    from: z.iso.datetime({ offset: true }),
+    to: z.iso.datetime({ offset: true }),
+  })
+  .refine(({ from, to }) => {
+    const duration = Date.parse(to) - Date.parse(from);
+    return duration > 0 && duration <= 366 * 86400000;
+  }, 'Choose a range of at most 366 days');
+const occupancySchema = z.object({
+  booked: z.number().nonnegative(),
+  capacity: z.number().nonnegative(),
+});
+const overviewEventSchema = z.object({
+  id: z.string(),
+  venueId: z.string(),
+  venueName: z.string(),
+  title: z.string(),
+  start: z.string(),
+  sold: z.number().nonnegative(),
+  capacity: z.number().nonnegative(),
+  blocked: z.number().nonnegative(),
+});
+export const overviewSchema = z.object({
+  reservations: z.number().nonnegative(),
+  placesBooked: z.number().nonnegative(),
+  revenue: z.array(z.object({ currency: currencySchema, amount: z.number().nonnegative() })),
+  seats: occupancySchema,
+  resources: occupancySchema,
+  events: z.array(overviewEventSchema),
+  recent: z.array(
+    z.object({
+      id: z.string(),
+      guestName: z.string(),
+      venueName: z.string(),
+      resourceLabel: z.string(),
+      start: z.string(),
+    }),
+  ),
+  venues: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      kind: z.string(),
+      booked: z.number().nonnegative(),
+      capacity: z.number().nonnegative(),
+      event: overviewEventSchema.nullable(),
+    }),
+  ),
+});
+export type OverviewData = z.infer<typeof overviewSchema>;

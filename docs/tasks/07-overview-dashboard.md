@@ -32,5 +32,20 @@ A new **Overview** screen, the default admin landing page.
 
 ## Acceptance
 
-- [ ] API tests cover empty data, multiple currencies, cancelled bookings excluded.
-- [ ] Browser test: sign in → Overview shows a booking just created.
+- [x] API tests cover empty data, multiple currencies, cancelled bookings excluded.
+- [x] Browser test: sign in → Overview shows a booking just created.
+
+## Implemented
+
+- Guarded SQL aggregates and shared request/response contracts; requests are limited to 366 days.
+- Default and restored admin sessions open Overview; guests do not see its navigation.
+- UTC presets, per-currency expected revenue, separate event-seat occupancy and daily distinct
+  table/space utilization, upcoming event seat-management links, recent reservations and venue cards.
+- Event denominator is resource count minus blocks per event; empty denominators show an em dash.
+- API tests cover authentication, range validation, empty results, cancelled exclusion,
+  multiple currencies, booking/block join multiplication, party sizes and daily resource deduplication.
+- Browser coverage verifies fresh/restored sign-in, a new reservation, the 30-day range,
+  seat-management navigation and the Reservations link.
+
+Capacity uses the current layout. Historical capacity, hourly occupancy and automatic refresh
+are outside this task; the screen has a manual refresh button. Reporting semantics are in README.

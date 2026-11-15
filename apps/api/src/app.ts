@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { Pool } from 'pg';
 import { z } from 'zod';
 import {
+  overviewRangeSchema,
   layoutSchema,
   seatLocation,
   reservationPrice,
@@ -20,6 +21,7 @@ import {
   makeTemplate,
   saveVenueSchema,
 } from '@openvenue/contracts';
+import { overview } from './overview';
 import { initialize, syncResources, transaction } from './database';
 import { authentication, tokenHash } from './auth';
 import { generateScene, SceneGenerationError } from './scene-generation';
@@ -430,6 +432,10 @@ export async function createApp(config: {
       res.status(201).json(booked);
     },
   );
+  router.get('/overview', guard, async (req, res) => {
+    const { from, to } = overviewRangeSchema.parse(req.query);
+    res.json(await overview(pool, from, to));
+  });
   router.get('/bookings', guard, async (_req, res) => {
     res.json(
       (

@@ -15,6 +15,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { Overview } from './Overview';
 import { EventSeatControls } from './EventSeatControls';
 import { Modal } from './Modal';
 import { SceneBoundary } from './SceneBoundary';
@@ -89,7 +90,7 @@ export default function App() {
   const [admin, setAdmin] = useState(false),
     [editing, setEditing] = useState(false),
     [dirty, setDirty] = useState(false),
-    [tab, setTab] = useState<'map' | 'bookings'>('map');
+    [tab, setTab] = useState<'map' | 'bookings' | 'overview'>('map');
   const [modal, setModal] = useState<'login' | 'venue' | 'show' | 'generate' | null>(null),
     [source, setSource] = useState<Venue | null>(null);
   const [kind, setKind] = useState<VenueKind>('restaurant'),
@@ -113,6 +114,14 @@ export default function App() {
   const [shows, setShows] = useState<Show[]>([]),
     [showId, setShowId] = useState(''),
     [showTitle, setShowTitle] = useState('');
+  const [overviewEvent, setOverviewEvent] = useState('');
+  useEffect(() => {
+    if (overviewEvent && shows.some((show) => show.id === overviewEvent)) {
+      setShowId(overviewEvent);
+      setManagingSeats(true);
+      setOverviewEvent('');
+    }
+  }, [shows, overviewEvent]);
   const [blocked, setBlocked] = useState<string[]>([]);
   const [managingSeats, setManagingSeats] = useState(false);
   const [managedIds, setManagedIds] = useState<string[]>([]);
@@ -242,7 +251,10 @@ export default function App() {
       setLoaded(true);
     });
     api('/auth/me')
-      .then(() => setAdmin(true))
+      .then(() => {
+        setAdmin(true);
+        setTab('overview');
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -611,6 +623,19 @@ export default function App() {
           </span>
         </a>
         <div className={sideLabel}>YOUR WORKSPACE</div>
+        {admin && (
+          <button
+            className={navItem(tab === 'overview')}
+            onClick={() => {
+              if (dirty && !confirm('Discard unsaved layout changes?')) return;
+              setEditing(false);
+              setDirty(false);
+              setTab('overview');
+            }}
+          >
+            Overview
+          </button>
+        )}
         <button className={navItem(tab === 'map')} onClick={directory}>
           <span className="text-base opacity-80">
             <LayoutGrid
@@ -777,7 +802,13 @@ export default function App() {
           <div>
             Workspace <span className="mx-2 text-stone-300">/</span>{' '}
             <span className="font-medium text-ink">
-              {tab === 'bookings' ? 'Reservations' : admin ? 'Venue management' : 'Book a place'}
+              {tab === 'overview'
+                ? 'Overview'
+                : tab === 'bookings'
+                  ? 'Reservations'
+                  : admin
+                    ? 'Venue management'
+                    : 'Book a place'}
             </span>
           </div>
           <div className="flex items-center gap-2.5 max-md:hidden">
@@ -860,7 +891,15 @@ export default function App() {
               ))}
             </nav>
           )}
-          {tab === 'bookings' ? (
+          {tab === 'overview' && admin ? (
+            <Overview
+              onReservations={showBookings}
+              onEvent={(id, eventId) => {
+                chooseVenue(id);
+                setOverviewEvent(eventId);
+              }}
+            />
+          ) : tab === 'bookings' ? (
             <section className="panel booking-list pb-2">
               <div className="flex flex-wrap items-end justify-between gap-4 px-6 pt-6 pb-5 max-sm:px-4">
                 <div>
@@ -1651,7 +1690,7 @@ export default function App() {
                 await api('/auth/login', json({ password }));
                 setAdmin(true);
                 closeLogin();
-                setTab('map');
+                setTab('overview');
                 setStep('venues');
                 setMessage('Signed in as administrator.');
               });

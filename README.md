@@ -23,7 +23,29 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 
 Guests start in the venue directory, choose dates, a cinema screening or a stadium event, select a place in the default 3D view, review their choice, and receive a confirmation reference. Availability is checked again by the server when confirming; a conflict keeps the guest’s name so they can choose another place. Save the confirmation details before leaving the page; guest self-service cancellation and email receipts are not included.
 
-Administrators sign in to a venue directory, with New venue in the sidebar. Venue workspaces use a compact header and a viewport-sized map; Reservations has its own heading. Venue setup, layout editing, showtimes, and reservations are available directly. Existing venues and bookings are preserved when updating the app.
+Administrators land on Overview after signing in or restoring a session, with New venue in the sidebar and access to venue setup, layout editing, showtimes, and reservations. Venue workspaces use a compact header and a viewport-sized map; Reservations has its own heading. Existing venues and bookings are preserved when updating the app.
+
+## Operator overview
+
+Overview reports Today, Next 7 days, or Next 30 days in UTC, with reservation count,
+seats/places booked (including table party sizes), and expected revenue separated by currency.
+Revenue uses each confirmed reservation's saved price and is **not collected**. A booking
+that overlaps the selected half-open interval counts once, including its full price; cancelled
+reservations are excluded. Recent reservations are the last ten created within that selection.
+Use Refresh overview to retrieve changes made while the screen is open.
+
+Event occupancy sums confirmed seats against the number of layout resources minus blocked
+seats for each event overlapping the range. Table/parking utilization counts distinct booked
+resources per UTC day against resource count × reporting days; it is not hourly occupancy or
+restaurant chair occupancy. These two percentages stay separate. A zero denominator displays
+an em dash. Upcoming events include ongoing events and link directly to their seat controls.
+Venue cards show the next ongoing/upcoming event, or today's UTC resource utilization.
+
+`GET /api/overview?from=<ISO timestamp>&to=<ISO timestamp>` requires an admin session and
+accepts positive ranges up to 366 days. Aggregates run in one SQL statement, with booking and
+block counts computed independently. For custom API ranges, daily buckets start at `from`
+and the last bucket may be partial. Values describe the current saved layout; capacity history
+is not snapshotted. The dashboard is not a payment ledger or a measure of hours occupied.
 
 ## Dynamic scene builder and pricing
 

@@ -608,12 +608,12 @@ test('admin sign-in supports retry, hides dismissed credentials and opens manage
   await password.fill('integration-password-123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Manage your venues' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'New venue', exact: true })).toBeVisible();
   await page.locator('.venue-list button').first().click();
   await expect(page.getByRole('button', { name: 'Edit layout', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Manage your venues' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
 });
 
 test('layout studio keeps the canvas stable and finds editable items by name', async ({ page }) => {
