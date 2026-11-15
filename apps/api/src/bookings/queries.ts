@@ -1,5 +1,5 @@
 import { bookingCursorSchema, bookingFiltersSchema } from '@openvenue/contracts';
-import type { Pool } from 'pg';
+import type { EntityManager } from '@mikro-orm/postgresql';
 import type { z } from 'zod';
 
 // Public confirmation fields deliberately exclude contacts and staff notes.
@@ -7,7 +7,7 @@ export const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "
 export const adminBookingSelect = `SELECT ${bookingColumns}, b.show_id AS "showId", b.guest_email AS "guestEmail", b.guest_phone AS "guestPhone", b.notes, b.checked_in_at AS "checkedInAt", b.created_at AS "createdAt", v.name AS "venueName",r.label AS "resourceLabel" FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN resources r ON r.id=b.resource_id`;
 
 export async function queryBookings(
-  pool: Pool,
+  em: EntityManager,
   filters: z.infer<typeof bookingFiltersSchema>,
   paginate: boolean,
 ) {
@@ -15,7 +15,7 @@ export async function queryBookings(
     clauses: string[] = [];
   const parameter = (value: unknown) => {
     values.push(value);
-    return `$${values.length}`;
+    return `:p${values.length}`;
   };
   if (filters.venueId) clauses.push(`b.venue_id=${parameter(filters.venueId)}`);
   if (filters.showId) clauses.push(`b.show_id=${parameter(filters.showId)}`);
@@ -46,18 +46,21 @@ export async function queryBookings(
     ' FROM bookings',
     `, to_char(b.starts_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorStart" FROM bookings`,
   );
-  const result = await pool.query(
+  const result = await em.execute(
     `${select} ${clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''} ORDER BY b.starts_at,b.id ${paginate ? `LIMIT ${parameter(filters.limit + 1)}` : ''}`,
-    values,
+    Object.fromEntries(values.map((value, i) => [`p${i + 1}`, value])),
   );
-  const more = paginate && result.rows.length > filters.limit;
-  const rows = more ? result.rows.slice(0, filters.limit) : result.rows;
+  const more = paginate && result.length > filters.limit;
+  const rows = more ? result.slice(0, filters.limit) : result;
   const last = rows.at(-1);
   return {
-    items: rows.map(({ cursorStart: _cursor, ...booking }) => booking),
-    nextCursor: more
-      ? Buffer.from(JSON.stringify({ start: last.cursorStart, id: last.id })).toString('base64url')
-      : null,
+    items: rows.map(({ cursorStart: _cursor, ...booking }) => bookingRecord(booking)),
+    nextCursor:
+      more && last
+        ? Buffer.from(JSON.stringify({ start: last.cursorStart, id: last.id })).toString(
+            'base64url',
+          )
+        : null,
   };
 }
 export function csvCell(value: unknown): string {
@@ -97,4 +100,15 @@ export function bookingsCsv(rows: Record<string, unknown>[]) {
     ].join('\r\n') +
     '\r\n'
   );
+}
+
+// Raw PostgreSQL timestamps are strings in MikroORM; preserve the API and CSV date format.
+export function bookingRecord(row: Record<string, any>) {
+  return {
+    ...row,
+    start: new Date(row.start),
+    end: new Date(row.end),
+    checkedInAt: row.checkedInAt == null ? null : new Date(row.checkedInAt),
+    createdAt: new Date(row.createdAt),
+  };
 }

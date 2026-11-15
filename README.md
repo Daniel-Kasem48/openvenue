@@ -179,19 +179,25 @@ tests/                Contract tests and real PostgreSQL integration tests
   browser/            Playwright end-to-end flows
 ```
 
-React + TypeScript + Vite, NestJS + Express, PostgreSQL + `pg`, Zod,
+React + TypeScript + Vite, NestJS + Express, PostgreSQL + MikroORM, Zod,
 Three.js + React Three Fiber. Models are original procedural geometry, with no remote models or texture downloads. One API process, one database, no Redis or queues.
 The backend uses NestJS feature modules: `AuthModule`, `AccountsModule`, `VenuesModule`,
 `EventsModule`, `BookingsModule`, `OverviewModule` and `SceneGenerationModule`. Controllers
-own HTTP routing and response headers; injectable services own business operations and SQL.
-`DatabaseModule` initializes migrations and closes its connection pool through Nest lifecycle
+own HTTP routing and response headers; injectable services own business operations and persistence.
+`DatabaseModule` initializes MikroORM and SQL migrations and closes the ORM through Nest lifecycle
 hooks. Feature modules explicitly import authentication; role guards read current permissions
 from the database. The shared exception filter maps validation and database errors to safe API
 responses. Express is the HTTP adapter and supplies parsing, cookies, security headers and static
 assets; business routes are registered by Nest controllers.
 
 Explicit `@Inject(...)` tokens keep dependency injection compatible with the existing `tsx`
-runtime, which does not emit decorator type metadata. No new dependency or migration is needed.
+runtime, which does not emit decorator type metadata. Explicit `EntitySchema` mappings cover all
+nine tables and foreign keys. Each service operation uses an isolated EntityManager fork;
+transaction callbacks share that manager with pricing, inventory and audit helpers. Ordinary CRUD
+uses ORM entities, while reports, advisory locks and the guarded inventory upsert use SQL through
+MikroORM. Existing SQL migrations preserve PostgreSQL-specific constraints; startup never runs
+automatic schema synchronization. Node 22.17+ is required (Docker and CI use Node 24).
+Direct `pg` access is retained only in integration-test fixtures.
 The `createApp(config)` entry point remains available for isolated API/browser tests, including
 per-application rate limits. Browser tests start a fresh API child process through `tsx`,
 because Playwright’s own transformer does not support Nest parameter decorators. Shared Zod
@@ -348,3 +354,5 @@ while a reservation is being submitted.
 Potential organizer and ticketing integrations, API restrictions and a phased recommendation are
 documented in [Ticketing platforms](docs/integrations/ticketing-platforms.md). These integrations
 are researched proposals; no external account is connected.
+
+The [Ticketmaster rollout plan](docs/plans/ticketmaster-integration.md) separates event discovery and purchase links from partner-approved 3D seat reservations.

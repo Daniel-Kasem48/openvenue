@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import { Pool } from 'pg';
+import { MikroORM } from '@mikro-orm/postgresql';
+import { randomUUID } from 'node:crypto';
+import { makeTemplate } from '@openvenue/contracts';
+import { Venue } from '../apps/api/src/database/entities';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../apps/api/src/app';
 import { DatabaseService } from '../apps/api/src/database/database.service';
@@ -13,10 +16,13 @@ const config = {
 };
 afterEach(() => vi.restoreAllMocks());
 
-it('releases the database pool when application initialization fails', async () => {
+it('closes the ORM when application initialization fails', async () => {
   const failure = new Error('Migration failed');
-  vi.spyOn(DatabaseService.prototype, 'onModuleInit').mockRejectedValueOnce(failure);
-  const close = vi.spyOn(Pool.prototype, 'end');
+  const close = vi.fn();
+  vi.spyOn(MikroORM, 'init').mockResolvedValueOnce({
+    em: { fork: () => ({ transactional: () => Promise.reject(failure) }) },
+    close,
+  } as unknown as MikroORM);
   await expect(createApp(config)).rejects.toBe(failure);
   expect(close).toHaveBeenCalledOnce();
 });
@@ -26,6 +32,32 @@ describe.skipIf(!databaseUrl)('Nest application lifecycle and routing', () => {
   afterEach(async () => {
     await app?.close();
     app = undefined;
+  });
+  it('isolates entity state between operations and rolls back flushed writes', async () => {
+    app = await createApp(config);
+    const db = app.get(DatabaseService);
+    const first = db.em,
+      second = db.em;
+    expect(first).not.toBe(second);
+    const [venue] = await first.find(Venue, {}, { limit: 1 });
+    expect(venue).toBeDefined();
+    const originalName = venue.name;
+    venue.name = 'Unflushed private change';
+    expect((await second.findOneOrFail(Venue, venue.id)).name).toBe(originalName);
+    const id = randomUUID();
+    await expect(
+      db.em.transactional(async (em) => {
+        em.create(Venue, {
+          id,
+          name: 'Rolled back ORM venue',
+          kind: 'parking',
+          layout: makeTemplate('parking'),
+        });
+        await em.flush();
+        throw new Error('Abort after flush');
+      }),
+    ).rejects.toThrow('Abort after flush');
+    expect(await db.em.count(Venue, { id })).toBe(0);
   });
   it('checks permissions before consuming the scene-generation allowance', async () => {
     app = await createApp(config);
@@ -81,9 +113,11 @@ describe.skipIf(!databaseUrl)('Nest application lifecycle and routing', () => {
     expect(invalidId.status).toBe(400);
     expect(await (await fetch(base + '/api/health')).json()).toEqual({ status: 'ok' });
     expect(await (await fetch(base + '/API/health')).json()).toEqual({ status: 'ok' });
-    const pool = app.get(DatabaseService).pool;
+    const db = app.get(DatabaseService);
+    const ormClose = vi.spyOn(MikroORM.prototype, 'close');
     await app.close();
     app = undefined;
-    await expect(pool.query('SELECT 1')).rejects.toThrow('Cannot use a pool after calling end');
+    expect(ormClose).toHaveBeenCalledOnce();
+    expect(() => db.em).toThrow('Database is not initialized');
   });
 });

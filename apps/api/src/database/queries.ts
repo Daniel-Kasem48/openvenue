@@ -1,101 +1,57 @@
 import { makeTemplate, type Layout, type VenueKind } from '@openvenue/contracts';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { Pool, type PoolClient } from 'pg';
+import type { EntityManager } from '@mikro-orm/postgresql';
+import { Resource, Show, Venue } from './entities';
 
-export async function syncResources(client: PoolClient, venueId: string, layout: Layout) {
+export async function syncResources(em: EntityManager, venueId: string, layout: Layout) {
   const resources = layout.floors.flatMap((f) => f.resources);
   const ids = resources.map((r) => r.id);
-  const foreign = await client.query(
-    'SELECT id FROM resources WHERE id=ANY($1::uuid[]) AND venue_id<>$2',
-    [ids, venueId],
-  );
-  if (foreign.rowCount)
+  if (await em.count(Resource, { id: { $in: ids }, venue_id: { $ne: venueId } }))
     throw Object.assign(new Error('Resource identifiers belong to another venue'), { status: 409 });
-  await client.query(
+  await em.execute(
     `DELETE FROM event_seat_blocks b USING shows s, resources r
-     WHERE b.show_id=s.id AND b.resource_id=r.id AND r.venue_id=$1
-       AND NOT (r.id=ANY($2::uuid[])) AND s.ends_at<=now()`,
+     WHERE b.show_id=s.id AND b.resource_id=r.id AND r.venue_id=?
+       AND NOT (r.id=ANY(ARRAY[?]::uuid[])) AND s.ends_at<=now()`,
     [venueId, ids],
   );
-  await client.query('DELETE FROM resources WHERE venue_id=$1 AND NOT (id=ANY($2::uuid[]))', [
-    venueId,
-    ids,
-  ]);
-  for (const r of resources) {
-    const result = await client.query(
-      'INSERT INTO resources(id,venue_id,label) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET label=EXCLUDED.label WHERE resources.venue_id=EXCLUDED.venue_id RETURNING id',
-      [r.id, venueId, r.label],
+  await em.nativeDelete(Resource, { venue_id: venueId, id: { $nin: ids } });
+  for (const resource of resources) {
+    // The ownership predicate also protects concurrent inserts from another venue.
+    const rows = await em.execute(
+      `INSERT INTO resources(id,venue_id,label) VALUES(?,?,?) ON CONFLICT(id)
+       DO UPDATE SET label=EXCLUDED.label WHERE resources.venue_id=EXCLUDED.venue_id RETURNING id`,
+      [resource.id, venueId, resource.label],
     );
-    if (!result.rowCount)
+    if (!rows.length)
       throw Object.assign(new Error('Resource identifiers belong to another venue'), {
         status: 409,
       });
   }
 }
-export async function transaction<T>(
-  pool: Pool,
-  work: (client: PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await work(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-export async function initialize(pool: Pool) {
-  const sql = await readFile(new URL('../../migrations/001_initial.sql', import.meta.url), 'utf8');
-  const pricingSql = await readFile(
-    new URL('../../migrations/003_stadium_pricing.sql', import.meta.url),
-    'utf8',
+
+export async function initialize(em: EntityManager) {
+  // Existing idempotent SQL migrations preserve PostgreSQL-specific constraints on upgrades.
+  const migrations = [
+    '001_initial',
+    '002_party_size',
+    '003_stadium_pricing',
+    '004_event_seat_blocks',
+    '005_event_management',
+    '006_venue_archive',
+    '007_booking_details',
+    '008_show_pricing',
+    '009_staff_accounts',
+  ];
+  const scripts = await Promise.all(
+    migrations.map((name) =>
+      readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), 'utf8'),
+    ),
   );
-  const partySizeSql = await readFile(
-    new URL('../../migrations/002_party_size.sql', import.meta.url),
-    'utf8',
-  );
-  const blocksSql = await readFile(
-    new URL('../../migrations/004_event_seat_blocks.sql', import.meta.url),
-    'utf8',
-  );
-  const eventsSql = await readFile(
-    new URL('../../migrations/005_event_management.sql', import.meta.url),
-    'utf8',
-  );
-  const archiveSql = await readFile(
-    new URL('../../migrations/006_venue_archive.sql', import.meta.url),
-    'utf8',
-  );
-  const bookingDetailsSql = await readFile(
-    new URL('../../migrations/007_booking_details.sql', import.meta.url),
-    'utf8',
-  );
-  const eventPricingSql = await readFile(
-    new URL('../../migrations/008_show_pricing.sql', import.meta.url),
-    'utf8',
-  );
-  const accountsSql = await readFile(
-    new URL('../../migrations/009_staff_accounts.sql', import.meta.url),
-    'utf8',
-  );
-  await transaction(pool, async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(745921)');
-    await client.query(sql);
-    await client.query(partySizeSql);
-    await client.query(pricingSql);
-    await client.query(blocksSql);
-    await client.query(eventsSql);
-    await client.query(archiveSql);
-    await client.query(bookingDetailsSql);
-    await client.query(eventPricingSql);
-    await client.query(accountsSql);
-    if ((await client.query('SELECT id FROM venues LIMIT 1')).rowCount) return;
+  await em.transactional(async (em) => {
+    await em.execute('SELECT pg_advisory_xact_lock(745921)');
+    for (const script of scripts) await em.execute(script);
+    if (await em.count(Venue, {})) return;
     for (const [kind, name] of [
       ['restaurant', 'The Greenhouse'],
       ['parking', 'Central Parking'],
@@ -104,27 +60,21 @@ export async function initialize(pool: Pool) {
     ] as [VenueKind, string][]) {
       const id = randomUUID(),
         layout = makeTemplate(kind);
-      await client.query('INSERT INTO venues(id,name,kind,layout) VALUES($1,$2,$3,$4)', [
-        id,
-        name,
-        kind,
-        JSON.stringify(layout),
-      ]);
-      await syncResources(client, id, layout);
+      em.create(Venue, { id, name, kind, layout });
+      await em.flush();
+      await syncResources(em, id, layout);
       if (kind === 'cinema' || kind === 'stadium') {
         const start = new Date();
         start.setDate(start.getDate() + 1);
         start.setHours(19, 0, 0, 0);
-        await client.query(
-          'INSERT INTO shows(id,venue_id,title,starts_at,ends_at) VALUES($1,$2,$3,$4,$5)',
-          [
-            randomUUID(),
-            id,
-            kind === 'stadium' ? 'Community Cup · sample match' : 'A night at the movies',
-            start,
-            new Date(+start + 7200000),
-          ],
-        );
+        em.create(Show, {
+          id: randomUUID(),
+          venue_id: id,
+          title: kind === 'stadium' ? 'Community Cup · sample match' : 'A night at the movies',
+          starts_at: start,
+          ends_at: new Date(+start + 7200000),
+        });
+        await em.flush();
       }
     }
   });

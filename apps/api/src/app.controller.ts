@@ -11,7 +11,7 @@ export class AppController {
     return { publicOrigin: this.config.publicOrigin ?? null };
   }
   @Get('health') async health() {
-    await this.db.pool.query('SELECT 1');
+    await this.db.em.execute('SELECT 1');
     return { status: 'ok' };
   }
 }

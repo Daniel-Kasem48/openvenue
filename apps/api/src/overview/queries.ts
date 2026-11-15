@@ -1,14 +1,14 @@
-import type { Pool } from 'pg';
+import type { EntityManager } from '@mikro-orm/postgresql';
 
 // Independent aggregates prevent bookings × blocks from inflating sales or capacity.
-export async function overview(pool: Pool, from: string, to: string) {
-  const result = await pool.query(
+export async function overview(em: EntityManager, from: string, to: string) {
+  const result = await em.execute(
     `
     WITH capacities AS (
       SELECT v.id, v.name, v.kind, count(r.id)::int AS capacity
       FROM venues v LEFT JOIN resources r ON r.venue_id=v.id GROUP BY v.id
     ), selected_bookings AS (
-      SELECT * FROM bookings WHERE status='confirmed' AND starts_at<$2 AND ends_at>$1
+      SELECT * FROM bookings WHERE status='confirmed' AND starts_at<:to AND ends_at>:from
     ), event_totals AS (
       SELECT s.*, c.name AS venue_name,
         (SELECT count(*)::int FROM bookings b WHERE b.show_id=s.id AND b.status='confirmed') AS sold,
@@ -20,10 +20,10 @@ export async function overview(pool: Pool, from: string, to: string) {
         'start',starts_at,'sold',sold,'blocked',blocked,'capacity',greatest(0,capacity-blocked)) AS data
       FROM event_totals
     ), selected_events AS (
-      SELECT * FROM events WHERE starts_at<$2 AND ends_at>$1
+      SELECT * FROM events WHERE starts_at<:to AND ends_at>:from
     ), days AS (
-      SELECT d, least(d+interval '24 hours',$2::timestamptz) AS until
-      FROM generate_series($1::timestamptz,$2::timestamptz,interval '24 hours') d WHERE d<$2
+      SELECT d, least(d+interval '24 hours',:to::timestamptz) AS until
+      FROM generate_series(:from::timestamptz,:to::timestamptz,interval '24 hours') d WHERE d<:to
     ), resource_days AS (
       SELECT c.id, c.capacity,
         (SELECT count(DISTINCT b.resource_id) FROM selected_bookings b
@@ -59,7 +59,7 @@ export async function overview(pool: Pool, from: string, to: string) {
       'recent',coalesce((SELECT jsonb_agg(recent) FROM recent),'[]'::jsonb),
       'venues',coalesce((SELECT jsonb_agg(venue_cards) FROM venue_cards),'[]'::jsonb)
     ) AS overview`,
-    [from, to],
+    { from, to },
   );
-  return result.rows[0].overview;
+  return result[0].overview;
 }

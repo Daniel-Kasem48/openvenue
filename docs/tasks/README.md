@@ -35,7 +35,7 @@ Work tasks **in order** unless a task says otherwise. One task = one branch = on
   `.field-error`, `.empty`, `.pill`, `.section`, `.float-button`. Use these and Tailwind utilities;
   do not add new plain-CSS files.
 - 3D: three.js via React Three Fiber + drei (`Map3D.tsx`, `scene/*`). 2D: SVG (`Map2D.tsx`).
-- API: NestJS feature modules/controllers/services under `apps/api/src`, composed by `app.module.ts`. Postgres, raw SQL.
+- API: NestJS feature modules/controllers/services under `apps/api/src`, composed by `app.module.ts`. Postgres via MikroORM entities and transactions; specialized reports and locks retain SQL.
 - Migrations: `apps/api/migrations/NNN_name.sql`, applied in order, idempotent
   (`IF NOT EXISTS`). Next free number is **010**.
 - Shared types and zod schemas: `packages/contracts/src/index.ts`. Any API or layout JSON change

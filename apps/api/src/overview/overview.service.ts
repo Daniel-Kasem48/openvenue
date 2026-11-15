@@ -8,6 +8,6 @@ export class OverviewService {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
   async get(query: Record<string, unknown>) {
     const { from, to } = overviewRangeSchema.parse(query);
-    return await overview(this.db.pool, from, to);
+    return await overview(this.db.em, from, to);
   }
 }
