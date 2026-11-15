@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactNode, type ReactElement } from 'react';
 import { expect, it } from 'vitest';
-import { Color } from 'three';
+import { Color, ShaderLib, type MeshStandardMaterial } from 'three';
+import { floorFade } from '../apps/web/src/scene/floorFade';
 import { Box } from '../apps/web/src/scene/Models';
 import { StadiumPitch } from '../apps/web/src/scene/StadiumPitch';
 
@@ -39,5 +40,25 @@ it('keeps editable pitch dimensions and contrasts stripes while protecting marki
   for (const line of lines) {
     expect(line.props.polygonOffset).toBe(true);
     expect(line.props.polygonOffsetFactor).toBeLessThan(0);
+  }
+});
+
+it('fades the floor in shared world coordinates without replacing standard lighting or shadows', () => {
+  for (const [width, depth] of [
+    [12, 8],
+    [80, 60],
+  ]) {
+    const shader = { ...ShaderLib.standard, uniforms: {} } as Parameters<
+      MeshStandardMaterial['onBeforeCompile']
+    >[0];
+    floorFade(width, depth)(shader, undefined as never);
+    expect(shader.uniforms.floorHalfSize.value.toArray()).toEqual([width / 2, depth / 2]);
+    expect(shader.vertexShader).toContain('(modelMatrix * vec4(position, 1.0)).xz');
+    expect(shader.fragmentShader).toContain(
+      'smoothstep(0.0, 0.65, min(edgeDistance.x, edgeDistance.y))',
+    );
+    expect(shader.fragmentShader).toContain('#include <lights_fragment_begin>');
+    expect(shader.fragmentShader).toContain('#include <shadowmap_pars_fragment>');
+    expect(shader.fragmentShader).toContain('#include <alphamap_fragment>');
   }
 });

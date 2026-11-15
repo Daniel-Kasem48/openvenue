@@ -32,7 +32,9 @@ and hard edges. It is the centrepiece of demos and the first thing operators see
 
 Reduced hemisphere fill and calibrated a warm directional key against the venue size, using
 soft shadow filtering and a small normal bias. Floors now use neutral canvas tones with faint
-plank seams. Cinema keeps its dark palette and has gently rounded arm pads. Existing rounded
+plank seams and a smooth 0.65-unit edge fade to the canvas background. The floor fade uses
+world coordinates shared by the existing slab and plank materials, so it adds no textures, meshes
+or draw calls and retains standard lighting/shadows. Cinema keeps its dark palette and has gently rounded arm pads. Existing rounded
 furniture and the four stadium instanced meshes remain; authored seat and availability colors,
 camera presets, controls and demand rendering are unchanged. Terrace supports have more contrast;
 the pitch has subtle mowing stripes and depth-offset markings to avoid flicker at shallow angles.
@@ -71,3 +73,13 @@ claiming the frame-rate requirement.
   starting the Docker Compose database. No schema or API changes.
 - Self-review: no camera/control changes, no authored/resource-state color changes, no additional
   stadium meshes or shadow passes; all eight captured scene images visually inspected.
+
+### Review follow-up: floor-edge fade
+
+Added the explicit gentle edge fade after review. A material shader patch reduces floor alpha
+only within 0.65 units of the perimeter, retaining the standard lighting and shadow shader chunks.
+The slab draws before the planks to keep transparent floor layers stable when orbiting. The same
+world-space boundary applies to every plank; floor dimensions key the materials
+so resized layouts receive fresh fade uniforms. All four after screenshots were refreshed.
+Focused verification: nine rendering/unit tests and four real-WebGL scene tests pass; the latter
+rebuilds the production bundle and includes typechecking. Physical-GPU performance remains unverified.

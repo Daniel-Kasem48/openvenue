@@ -10,6 +10,7 @@ import type { Floor, Resource, VenueKind } from '@openvenue/contracts';
 import { CinemaChair, DiningTable, ParkingBay } from './scene/Models';
 import { StadiumSeats } from './scene/StadiumSeats';
 import { Scenery } from './scene/Scenery';
+import { floorFade } from './scene/floorFade';
 type Viewpoint = 'overview' | 'top' | 'north' | 'south' | 'east' | 'west';
 function FitCamera({ revision, viewpoint }: { revision: number; viewpoint: Viewpoint }) {
   const bounds = useBounds();
@@ -231,16 +232,21 @@ export default function Map3D({
           <Bounds fit clip margin={1.15} maxDuration={0.35}>
             <FitCamera revision={cameraRevision} viewpoint={viewpoint} />
             <group>
-              <mesh receiveShadow position={[0, -0.15, 0]}>
+              <mesh receiveShadow position={[0, -0.15, 0]} renderOrder={-2}>
                 <boxGeometry args={[floor.width + 0.4, 0.3, floor.depth + 0.4]} />
                 <meshStandardMaterial
                   color={dark ? '#333545' : kind === 'parking' ? '#747e80' : '#d7d5ce'}
                   roughness={0.92}
+                  transparent
+                  depthWrite={false}
+                  onBeforeCompile={floorFade(floor.width, floor.depth)}
+                  key={`floor-${floor.width}-${floor.depth}`}
                 />
               </mesh>
               {Array.from({ length: Math.ceil(floor.width / 2) }, (_, i) => (
                 <mesh
                   key={i}
+                  renderOrder={-1}
                   rotation={[-Math.PI / 2, 0, 0]}
                   position={[-floor.width / 2 + i * 2 + 1, 0.001, 0]}
                   receiveShadow
@@ -261,6 +267,10 @@ export default function Map3D({
                             : '#e2e0d9'
                     }
                     roughness={0.9}
+                    transparent
+                    depthWrite={false}
+                    onBeforeCompile={floorFade(floor.width, floor.depth)}
+                    key={`floor-${floor.width}-${floor.depth}`}
                   />
                 </mesh>
               ))}
