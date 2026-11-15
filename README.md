@@ -122,15 +122,18 @@ Without `TEST_DATABASE_URL`, `npm test` explicitly skips the database suite.
 npm run format:check
 npm run build
 TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/openvenue_test npm test
-# Browser tests build the production frontend and start an isolated API on port 3189.
-# Use the test password below only with a dedicated test database.
+# Browser tests build once, then start a fresh API on an ephemeral port for each test.
 npx playwright install chromium
-DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/openvenue_test \
-  ADMIN_PASSWORD=integration-password-123 npm run test:e2e
+TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/openvenue_test npm run test:e2e
 ```
 
 GitHub Actions runs formatting, build/typecheck, PostgreSQL integration tests and
 Chromium browser tests. Browser tests use unique venue names and can be repeated.
+The browser fixture preserves existing database rows, isolates in-memory rate limits between
+tests, and closes each API and its database pool during teardown. Production rate limits remain
+enabled, including in tests. `TEST_DATABASE_URL` takes precedence over `DATABASE_URL` (also
+accepted for compatibility); `.env` is loaded automatically. The fixture uses a test-only admin
+password and never calls the optional scene-generation provider.
 
 ## Hosting and limits
 
