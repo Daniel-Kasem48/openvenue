@@ -1,5 +1,5 @@
 import { makeTemplate } from '@openvenue/contracts';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 test('operator creates a template, edits a map and manages a reservation', async ({ page }) => {
   const venueName = `Browser restaurant ${Date.now()}`;
   await page.goto('/');
@@ -472,6 +472,8 @@ test('selection and review preserve a manually panned and zoomed camera', async 
   await canvas.scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => (window as any).__cameraView?.length)).toBe(16);
   await page.waitForTimeout(600);
+  // Canvas sizing can move its centre after the initial scroll; hover waits and scrolls again.
+  await canvas.hover();
   const initial = await page.evaluate(() => (window as any).__cameraView);
   const box = (await canvas.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -636,7 +638,10 @@ test('layout studio keeps the canvas stable and finds editable items by name', a
   await expect(page.getByLabel('Resource label')).toHaveValue('Table 1');
   await page.getByText('Floor settings', { exact: true }).click();
   await page.getByLabel('Floor name', { exact: true }).fill('Main dining room');
-  await page.getByText('Reservation pricing', { exact: true }).click();
+  const pricing = page.locator('details').filter({
+    has: page.locator('summary', { hasText: /^Reservation pricing/ }),
+  });
+  if ((await pricing.getAttribute('open')) === null) await pricing.locator('summary').click();
   await page.getByRole('combobox', { name: 'Pricing mode' }).selectOption('uniform');
   await page.getByLabel('Standard reservation price').fill('12');
   await page.getByRole('button', { name: 'Save layout', exact: true }).click();
@@ -647,7 +652,7 @@ test('layout studio keeps the canvas stable and finds editable items by name', a
   await page.screenshot({ path: '/tmp/openvenue-editor-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByText('Reservation pricing', { exact: true }).scrollIntoViewIfNeeded();
+  await pricing.locator('summary').scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', { name: 'Save layout', exact: true })).toBeInViewport();
   await page.screenshot({ path: '/tmp/openvenue-editor-mobile.png', fullPage: true });
 });
@@ -748,6 +753,7 @@ test('generated scenes are previewed before applying and saved only on explicit 
   await page.getByLabel('Venue name').fill(name);
   await page.getByLabel('Starting layout').selectOption('empty');
   await page.getByRole('button', { name: 'Create venue' }).click();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   const venue = (await (await page.request.get('/api/venues')).json()).find(
     (v: any) => v.name === name,
   );
