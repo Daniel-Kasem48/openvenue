@@ -23,7 +23,7 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 
 Guests start in the venue directory, choose dates, a cinema screening or a stadium event, select a place in the default 3D view, review their choice, and receive a confirmation reference. Availability is checked again by the server when confirming; a conflict keeps the guest’s name so they can choose another place. Save the confirmation details before leaving the page; guest self-service cancellation and email receipts are not included.
 
-Administrators sign in to access venue setup, layout editing, showtimes, and the reservations list directly. Existing venues and bookings are preserved when updating the app.
+Administrators sign in to a venue directory, with New venue in the sidebar. Venue workspaces use a compact header and a viewport-sized map; Reservations has its own heading. Venue setup, layout editing, showtimes, and reservations are available directly. Existing venues and bookings are preserved when updating the app.
 
 ## Dynamic scene builder and pricing
 

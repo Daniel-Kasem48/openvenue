@@ -29,5 +29,7 @@ Operators get the venue on the whole screen; headings describe the current scree
 
 ## Acceptance
 
-- [ ] At 1440×900, admin venue screen: map top edge ≤ 220px from the top of the viewport.
-- [ ] Screenshot before/after attached to the PR.
+- [x] At 1440×900, admin venue screen: map top edge ≤ 220px from the top of the viewport.
+- [x] Screenshot before/after attached to the PR.
+
+Evidence: [before](evidence/02-before.png) · [after](evidence/02-after.png).

@@ -667,8 +667,8 @@ export default function App() {
         </div>
         {admin && (
           <button
-            className="add-venue mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-forest-300 transition hover:bg-white/5 hover:text-white max-sm:hidden"
-            aria-label="Add another venue"
+            className="add-venue mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-forest-300 transition hover:bg-white/5 hover:text-white"
+            aria-label="New venue"
             onClick={() => openCreate()}
           >
             + New venue
@@ -741,37 +741,31 @@ export default function App() {
             </span>
           </div>
         </header>
-        <div className="content mx-auto max-w-[1600px] px-8 py-8 max-lg:px-6 max-sm:px-4 max-sm:py-6">
-          <div className="page-heading mb-7 flex items-end justify-between gap-5 max-sm:flex-col max-sm:items-start">
-            <div>
-              <div className="eyebrow">
-                {admin ? 'OPERATOR WORKSPACE' : 'RESERVE YOUR NEXT VISIT'}
+        <div
+          className={`content mx-auto max-w-[1600px] px-8 max-lg:px-6 max-sm:px-4 ${admin && step !== 'venues' ? 'py-3' : 'py-8 max-sm:py-6'}`}
+        >
+          {step === 'venues' && tab === 'map' && (
+            <div className="page-heading mb-7 flex items-end justify-between gap-5 max-sm:flex-col max-sm:items-start">
+              <div>
+                <div className="eyebrow">
+                  {admin ? 'OPERATOR WORKSPACE' : 'RESERVE YOUR NEXT VISIT'}
+                </div>
+                <h1 className="mt-2 mb-1.5">
+                  {admin ? 'Manage your venues' : 'Where would you like to go?'}
+                </h1>
+                <p className="text-sm text-stone-500">
+                  {admin
+                    ? 'Set up spaces, edit layouts and manage guest reservations.'
+                    : 'Choose a venue, find your place and reserve in a few steps.'}
+                </p>
               </div>
-              <h1 className="mt-2 mb-1.5">
-                {admin
-                  ? 'Manage your venues'
-                  : step === 'venues'
-                    ? 'Where would you like to go?'
-                    : step === 'done'
-                      ? 'You’re booked.'
-                      : 'Plan your visit'}
-              </h1>
-              <p className="text-sm text-stone-500">
-                {admin
-                  ? 'Set up spaces, edit layouts and manage guest reservations.'
-                  : 'Choose a venue, find your place and reserve in a few steps.'}
-              </p>
+              {!admin && (
+                <button className="secondary" onClick={openLogin}>
+                  Admin sign in
+                </button>
+              )}
             </div>
-            {admin ? (
-              <button className="primary" onClick={() => openCreate()}>
-                + New venue
-              </button>
-            ) : (
-              <button className="secondary" onClick={openLogin}>
-                Admin sign in
-              </button>
-            )}
-          </div>
+          )}
           {error && modal !== 'login' && (
             <div
               className="notice mb-4 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-800 ring-1 ring-red-200/70"
@@ -1077,10 +1071,10 @@ export default function App() {
             </div>
           ) : (
             <section
-              className={`panel venue-panel ${editing ? 'layout-editor overflow-clip' : ''}`}
+              className={`panel venue-panel ${admin ? 'operator-venue' : ''} ${editing ? 'layout-editor overflow-clip' : ''}`}
             >
               <div
-                className={`flex items-center justify-between gap-4 px-6 py-5 max-lg:flex-wrap max-sm:items-start max-sm:px-4 ${
+                className={`flex items-center justify-between gap-4 px-6 py-3 max-lg:flex-wrap max-sm:items-start max-sm:px-4 ${
                   editing ? 'sticky top-0 z-10 border-b border-stone-100 bg-white' : ''
                 }`}
               >
@@ -1244,7 +1238,11 @@ export default function App() {
               </div>
               <div
                 className={`map-body ${isReview ? 'block' : 'flex items-stretch max-lg:flex-col'} ${
-                  editing ? 'lg:h-[clamp(520px,70vh,780px)]' : ''
+                  admin
+                    ? 'lg:h-[calc(100dvh-240px)] lg:min-h-[480px]'
+                    : editing
+                      ? 'lg:h-[clamp(520px,70vh,780px)]'
+                      : ''
                 }`}
               >
                 <div
@@ -1562,10 +1560,12 @@ export default function App() {
               </div>
             </section>
           )}
-          <footer className="page-footer mt-6 flex justify-between gap-3 text-xs text-stone-400">
-            <span>Thoughtfully mapped. Effortlessly reserved.</span>
-            <span className="max-sm:hidden">OpenVenue · Built for shared spaces</span>
-          </footer>
+          {!admin && (
+            <footer className="page-footer mt-6 flex justify-between gap-3 text-xs text-stone-400">
+              <span>Thoughtfully mapped. Effortlessly reserved.</span>
+              <span className="max-sm:hidden">OpenVenue · Built for shared spaces</span>
+            </footer>
+          )}
         </div>
       </main>
       {modal === 'generate' && current && (
@@ -1599,7 +1599,7 @@ export default function App() {
                 setAdmin(true);
                 closeLogin();
                 setTab('map');
-                setStep('place');
+                setStep('venues');
                 setMessage('Signed in as administrator.');
               });
             }}

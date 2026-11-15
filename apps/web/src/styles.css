@@ -228,6 +228,9 @@
   }
 
   /* Layout editor: fixed-height workspace on desktop so the inspector scrolls on its own. */
+  .operator-venue .map-stage {
+    @apply lg:h-auto lg:min-h-[480px];
+  }
   .layout-editor .map-stage {
     @apply lg:h-auto lg:min-h-0;
   }
