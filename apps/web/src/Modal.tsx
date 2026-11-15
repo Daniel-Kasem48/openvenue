@@ -17,9 +17,13 @@ export function Modal({
   }, []);
   return (
     <dialog className={className} ref={ref} onCancel={onClose}>
-      <div className="modal-head">
-        <h2>{title}</h2>
-        <button aria-label="Close dialog" onClick={onClose}>
+      <div className="modal-head mb-4 flex items-center justify-between gap-4">
+        <h2 className="text-xl">{title}</h2>
+        <button
+          className="grid size-8 place-items-center rounded-lg text-xl text-stone-400 transition hover:bg-stone-100 hover:text-ink"
+          aria-label="Close dialog"
+          onClick={onClose}
+        >
           ×
         </button>
       </div>

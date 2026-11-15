@@ -37,7 +37,7 @@ export function GenerateSceneDialog({
     <Modal
       title="Generate a scene with Claude"
       onClose={onClose}
-      className="scene-generation-dialog"
+      className="scene-generation-dialog w-[min(800px,calc(100vw-32px))] max-w-[800px]"
     >
       {!result ? (
         <form
@@ -68,8 +68,9 @@ export function GenerateSceneDialog({
             the result before using it.
           </p>
           <p className="muted">
-            Current venue type: <strong>{kind}</strong>. The description is checked before
-            generating a layout.
+            Current venue type:{' '}
+            <strong className="font-semibold text-ink capitalize">{kind}</strong>. The description
+            is checked before generating a layout.
           </p>
           <label>
             Describe your scene
@@ -87,7 +88,7 @@ export function GenerateSceneDialog({
           </label>
           <button
             type="button"
-            className="text-button"
+            className="text-button -mt-2 mb-3 -ml-2"
             disabled={busy}
             onClick={() => setPrompt(examples[kind])}
           >
@@ -103,7 +104,10 @@ export function GenerateSceneDialog({
             </p>
           )}
           {busy && (
-            <p role="status">
+            <p
+              role="status"
+              className="my-3 rounded-lg bg-forest-50 px-3 py-2.5 text-[13px] text-forest-800"
+            >
               Claude is checking your description and designing the scene. This may take up to 90
               seconds…
             </p>
@@ -114,7 +118,7 @@ export function GenerateSceneDialog({
         </form>
       ) : (
         <>
-          <p>{result.summary}</p>
+          <p className="mb-2 leading-relaxed text-stone-700">{result.summary}</p>
           <p className="muted">
             {result.layout.floors.length} floors ·{' '}
             {result.layout.floors.reduce((n, f) => n + f.resources.length, 0)} bookable places ·{' '}
@@ -130,7 +134,7 @@ export function GenerateSceneDialog({
               ))}
             </select>
           </label>
-          <div className="generated-scene-preview">
+          <div className="generated-scene-preview mb-4 overflow-hidden rounded-xl ring-1 ring-stone-200">
             <SceneBoundary
               key={result.layout.floors[floorIndex].id}
               fallback={
@@ -160,7 +164,7 @@ export function GenerateSceneDialog({
             saved until you choose Save layout. Review sizes, access routes, and prices in the
             editor.
           </p>
-          <div className="panel-actions">
+          <div className="flex flex-wrap justify-end gap-2">
             <button className="secondary" onClick={() => setResult(null)}>
               Revise description
             </button>

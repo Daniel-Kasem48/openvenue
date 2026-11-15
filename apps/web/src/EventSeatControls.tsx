@@ -56,7 +56,10 @@ export function EventSeatControls({
       setBlocks(await api<typeof blocks>(path));
     });
   return (
-    <section className="event-seat-controls" aria-label="Event seat controls">
+    <section
+      className="event-seat-controls mt-2 border-t border-stone-100 pt-5"
+      aria-label="Event seat controls"
+    >
       <div className="eyebrow">EVENT INVENTORY</div>
       <h3>Manage event seats</h3>
       <p className="muted">Blocks apply only to this event. Existing bookings are protected.</p>
@@ -74,16 +77,29 @@ export function EventSeatControls({
           <option value="block">Whole block</option>
         </select>
       </label>
-      <p aria-live="polite">{selected.length} seats selected</p>
-      <p className="muted">Click seats on the 2D or 3D map to toggle your selection.</p>
-      <div className="managed-seat-list">
-        {selected.map((r) => (
-          <div key={r.id}>{seatLocation(r)}</div>
-        ))}
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <p aria-live="polite" className="text-[13px] font-semibold text-ink">
+          {selected.length} seats selected
+        </p>
+        <button className="text-button -mr-2" onClick={onClear} disabled={!selected.length}>
+          Clear selection
+        </button>
       </div>
-      <button className="text-button" onClick={onClear} disabled={!selected.length}>
-        Clear selection
-      </button>
+      <p className="muted mb-2 text-xs">
+        Click seats on the 2D or 3D map to toggle your selection.
+      </p>
+      {selected.length > 0 && (
+        <div className="managed-seat-list mb-4 flex max-h-40 flex-wrap gap-1.5 overflow-auto">
+          {selected.map((r) => (
+            <span
+              key={r.id}
+              className="rounded-full bg-sprout-100 px-2.5 py-1 text-xs font-medium text-forest-800 ring-1 ring-sprout-300"
+            >
+              {seatLocation(r)}
+            </span>
+          ))}
+        </div>
+      )}
       <label>
         Reason for blocking
         <input
@@ -93,9 +109,9 @@ export function EventSeatControls({
           placeholder="e.g. camera platform"
         />
       </label>
-      <small className="muted">Visible to staff only.</small>
+      <small className="-mt-2.5 mb-4 text-xs text-stone-400">Visible to staff only.</small>
       <button
-        className="primary full"
+        className="primary full mb-2"
         disabled={working || !selected.length || !reason.trim()}
         onClick={() => void change(false)}
       >
@@ -108,17 +124,21 @@ export function EventSeatControls({
       >
         Release selected seats
       </button>
-      {loadError && <p role="alert">{loadError}</p>}
+      {loadError && (
+        <p className="field-error" role="alert">
+          {loadError}
+        </p>
+      )}
       {blocks.length > 0 && (
-        <details>
+        <details className="section mt-4">
           <summary>{blocks.length} blocked seats · staff reasons</summary>
-          <div className="managed-seat-list">
+          <div className="managed-seat-list max-h-48 divide-y divide-stone-100 overflow-auto text-[13px]">
             {blocks.map((b) => (
-              <p key={b.resourceId}>
+              <p key={b.resourceId} className="py-2 font-medium text-ink">
                 {floor.resources.find((r) => r.id === b.resourceId)
                   ? seatLocation(floor.resources.find((r) => r.id === b.resourceId)!)
                   : 'Seat on another floor'}
-                <small>{b.reason}</small>
+                <small className="mt-0.5 font-normal text-stone-500">{b.reason}</small>
               </p>
             ))}
           </div>

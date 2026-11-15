@@ -339,7 +339,7 @@ export default function Map2D({
           ENTRANCE ↑
         </text>
       </svg>
-      <div className="map-zoom">
+      <div className="map-zoom absolute right-4 bottom-4 flex overflow-hidden rounded-lg bg-white/95 shadow-sm ring-1 ring-stone-900/10 backdrop-blur max-sm:right-2.5 max-sm:bottom-3 [&>button]:px-3 [&>button]:py-1.5 [&>button]:text-[13px] [&>button]:text-stone-600 [&>button]:transition [&>button:hover]:bg-stone-50 [&>button:hover]:text-ink [&>button+button]:border-l [&>button+button]:border-stone-100">
         <button aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.6, z - 0.2))}>
           −
         </button>

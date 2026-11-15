@@ -180,19 +180,22 @@ export default function Map3D({
       className={'map-stage three-stage ' + (dark ? 'cinema-stage' : '')}
       aria-label="3D floor plan"
     >
-      <div className="scene-caption">
-        <span className="scene-tag">LIVE 3D</span>
-        <strong>
+      <div className="scene-caption pointer-events-none absolute top-5 left-6 z-[2] flex flex-col gap-1.5 text-ink max-sm:top-4 max-sm:left-4">
+        <span className="scene-tag flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] text-forest-600">
+          <i className="live-dot" />
+          LIVE 3D
+        </span>
+        <strong className="font-display text-lg font-semibold tracking-[-0.01em] max-sm:text-[15px]">
           {kind === 'restaurant'
             ? 'A place to gather'
             : kind === 'parking'
               ? 'A smoother arrival'
               : 'The best seat in the house'}
         </strong>
-        <small>
+        <small className="text-xs text-stone-500">
           {floor.name} · {floor.resources.length} bookable places
         </small>
-        {selected && <span className="object-label">Selected: {item?.label}</span>}
+        {selected && <span className="object-label mt-1 self-start">Selected: {item?.label}</span>}
       </div>
       <Canvas
         frameloop="demand"
@@ -201,7 +204,7 @@ export default function Map3D({
         camera={{ position: [size * 0.65, size * 0.75, size * 0.85], fov: 42 }}
         gl={{ antialias: true }}
       >
-        <color attach="background" args={[dark ? '#232b39' : '#e8ece5']} />
+        <color attach="background" args={[dark ? '#232b39' : '#eceee8']} />
         <hemisphereLight args={[dark ? '#d5d9f2' : '#fff6e5', dark ? '#42445c' : '#a6b5a0', 2]} />
         <directionalLight
           position={[8, 18, 10]}
@@ -332,11 +335,14 @@ export default function Map3D({
           enableDamping
         />
       </Canvas>
-      <div className="camera-viewpoints" aria-label="Camera viewpoints">
+      <div
+        className="camera-viewpoints absolute top-4 right-4 z-[2] flex max-w-[230px] flex-wrap justify-end gap-1 max-sm:top-[88px] max-sm:right-4 max-sm:left-4 max-sm:max-w-none max-sm:justify-start"
+        aria-label="Camera viewpoints"
+      >
         {(['overview', 'top', 'north', 'south', 'east', 'west'] as const).map((v) => (
           <button
             key={v}
-            className="secondary"
+            className={`float-button ${viewpoint === v ? 'bg-forest-800! text-white! ring-forest-900!' : ''}`}
             aria-label={`${v[0].toUpperCase() + v.slice(1)} camera view`}
             onClick={() => {
               setViewpoint(v);
@@ -348,7 +354,7 @@ export default function Map3D({
         ))}
       </div>
       <button
-        className="camera-reset"
+        className="camera-reset float-button absolute right-4 bottom-4 px-3 py-2 normal-case"
         aria-label="Reset 3D camera"
         onClick={() => {
           setViewpoint('overview');
