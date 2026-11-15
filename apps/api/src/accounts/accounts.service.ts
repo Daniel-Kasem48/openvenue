@@ -1,27 +1,13 @@
-import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
-import type { Router, RequestHandler } from 'express';
-import type { Pool, PoolClient } from 'pg';
+import { Inject, Injectable } from '@nestjs/common';
 import { createAccountSchema, updateAccountSchema } from '@openvenue/contracts';
-import { hashPassword, tokenHash, type Principal } from './auth';
-import { transaction } from './database';
-
+import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
+import type { Principal } from '../auth/credentials';
+import { hashPassword, tokenHash } from '../auth/credentials';
+import { fail } from '../common/errors';
+import { DatabaseService } from '../database/database.service';
+import { transaction } from '../database/queries';
 const columns = 'id,email,name,role,created_at AS "createdAt",disabled_at AS "disabledAt"';
-const fail = (status: number, message: string): never => {
-  throw Object.assign(new Error(message), { status });
-};
-export async function audit(
-  client: PoolClient,
-  principal: Principal,
-  action: string,
-  entity: string,
-  id: string,
-) {
-  await client.query(
-    'INSERT INTO audit_log(id,user_id,action,entity,entity_id) VALUES($1,$2,$3,$4,$5)',
-    [randomUUID(), principal.userId, action, entity, id],
-  );
-}
 async function lockOwner(client: PoolClient, principal: Principal) {
   // Serialize bootstrap and owner changes so two owners cannot remove the last owner.
   await client.query('SELECT pg_advisory_xact_lock(745922)');
@@ -38,15 +24,17 @@ async function lockOwner(client: PoolClient, principal: Principal) {
   )
     fail(403, 'Only an active owner can manage accounts.');
 }
-export function registerAccounts(router: Router, pool: Pool, ownerGuard: RequestHandler) {
-  router.get('/users', ownerGuard, async (_req, res) =>
-    res.json((await pool.query(`SELECT ${columns} FROM users ORDER BY created_at,id`)).rows),
-  );
-  router.post('/users', ownerGuard, async (req, res) => {
-    const body = createAccountSchema.parse(req.body);
+
+@Injectable()
+export class AccountsService {
+  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
+  async list() {
+    return (await this.db.pool.query(`SELECT ${columns} FROM users ORDER BY created_at,id`)).rows;
+  }
+  async create(input: unknown, principal: Principal, sessionToken: string) {
+    const body = createAccountSchema.parse(input);
     const passwordHash = await hashPassword(body.password);
-    const user = await transaction(pool, async (client) => {
-      const principal = res.locals.principal as Principal;
+    const user = await transaction(this.db.pool, async (client) => {
       await lockOwner(client, principal);
       if (!principal.userId && body.role !== 'owner')
         fail(400, 'The first account must be an owner.');
@@ -60,17 +48,16 @@ export function registerAccounts(router: Router, pool: Pool, ownerGuard: Request
       if (!principal.userId)
         await client.query('UPDATE sessions SET user_id=$1 WHERE token_hash=$2', [
           row.id,
-          tokenHash(req.cookies.ov_session),
+          tokenHash(sessionToken),
         ]);
       return row;
     });
-    res.status(201).json(user);
-  });
-  router.patch('/users/:id', ownerGuard, async (req, res) => {
-    const id = z.uuid().parse(req.params.id);
-    const body = updateAccountSchema.parse(req.body);
-    const user = await transaction(pool, async (client) => {
-      await lockOwner(client, res.locals.principal);
+    return user;
+  }
+  async update(id: string, input: unknown, principal: Principal) {
+    const body = updateAccountSchema.parse(input);
+    const user = await transaction(this.db.pool, async (client) => {
+      await lockOwner(client, principal);
       const old = (await client.query('SELECT * FROM users WHERE id=$1 FOR UPDATE', [id])).rows[0];
       if (!old) fail(404, 'Account not found');
       const role = body.role ?? old.role,
@@ -99,6 +86,6 @@ export function registerAccounts(router: Router, pool: Pool, ownerGuard: Request
         )
       ).rows[0];
     });
-    res.json(user);
-  });
+    return user;
+  }
 }

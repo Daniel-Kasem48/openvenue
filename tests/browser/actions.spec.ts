@@ -7,6 +7,7 @@ test('venue action menu supports keyboard, outside click and dirty save state', 
   await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
   await page.getByLabel('Password', { exact: true }).fill('integration-password-123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New venue', exact: true })).toBeVisible();
   const name = `Action menu ${Date.now()}`;
   const created = await page.request.post('/api/venues', { data: { name, kind: 'restaurant' } });
   expect(created.status()).toBe(201);

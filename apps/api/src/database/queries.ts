@@ -1,7 +1,7 @@
-import { Pool, type PoolClient } from 'pg';
-import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { makeTemplate, type Layout, type VenueKind } from '@openvenue/contracts';
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { Pool, type PoolClient } from 'pg';
 
 export async function syncResources(client: PoolClient, venueId: string, layout: Layout) {
   const resources = layout.floors.flatMap((f) => f.resources);
@@ -51,37 +51,37 @@ export async function transaction<T>(
   }
 }
 export async function initialize(pool: Pool) {
-  const sql = await readFile(new URL('../migrations/001_initial.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../migrations/001_initial.sql', import.meta.url), 'utf8');
   const pricingSql = await readFile(
-    new URL('../migrations/003_stadium_pricing.sql', import.meta.url),
+    new URL('../../migrations/003_stadium_pricing.sql', import.meta.url),
     'utf8',
   );
   const partySizeSql = await readFile(
-    new URL('../migrations/002_party_size.sql', import.meta.url),
+    new URL('../../migrations/002_party_size.sql', import.meta.url),
     'utf8',
   );
   const blocksSql = await readFile(
-    new URL('../migrations/004_event_seat_blocks.sql', import.meta.url),
+    new URL('../../migrations/004_event_seat_blocks.sql', import.meta.url),
     'utf8',
   );
   const eventsSql = await readFile(
-    new URL('../migrations/005_event_management.sql', import.meta.url),
+    new URL('../../migrations/005_event_management.sql', import.meta.url),
     'utf8',
   );
   const archiveSql = await readFile(
-    new URL('../migrations/006_venue_archive.sql', import.meta.url),
+    new URL('../../migrations/006_venue_archive.sql', import.meta.url),
     'utf8',
   );
   const bookingDetailsSql = await readFile(
-    new URL('../migrations/007_booking_details.sql', import.meta.url),
+    new URL('../../migrations/007_booking_details.sql', import.meta.url),
     'utf8',
   );
   const eventPricingSql = await readFile(
-    new URL('../migrations/008_show_pricing.sql', import.meta.url),
+    new URL('../../migrations/008_show_pricing.sql', import.meta.url),
     'utf8',
   );
   const accountsSql = await readFile(
-    new URL('../migrations/009_staff_accounts.sql', import.meta.url),
+    new URL('../../migrations/009_staff_accounts.sql', import.meta.url),
     'utf8',
   );
   await transaction(pool, async (client) => {

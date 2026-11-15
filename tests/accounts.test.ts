@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { expect, it } from 'vitest';
-import { hashPassword, verifyPassword } from '../apps/api/src/auth';
+import { hashPassword, verifyPassword } from '../apps/api/src/auth/credentials';
 
 it('hashes account passwords with separate salts and safely rejects invalid credentials', async () => {
   const password = 'correct horse battery staple';

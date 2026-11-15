@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
 import {
   kindSchema,
   layoutSchema,
@@ -8,6 +6,8 @@ import {
   sceneObjectSchema,
   type VenueKind,
 } from '@openvenue/contracts';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 
 const groupSchema = resourceSchema.omit({ id: true, kind: true }).extend({
   rows: z.number().int().min(1).max(100),

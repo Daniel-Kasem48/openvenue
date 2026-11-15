@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "experimentalDecorators": true
   },
   "include": ["apps", "packages", "tests", "*.ts"]
 }

@@ -172,7 +172,7 @@ reservation history cannot be removed, including through import.
 
 ```text
 apps/web/src/          React workspace, SVG editor and lazy-loaded 3D viewer
-apps/api/src/          NestJS host, REST routes, auth and database transactions
+apps/api/src/          NestJS AppModule, feature controllers and injectable services
 apps/api/migrations/   Initial schema (idempotent, locked during initialization)
 packages/contracts/   Zod validation, shared types and four template factories
 tests/                Contract tests and real PostgreSQL integration tests
@@ -181,8 +181,21 @@ tests/                Contract tests and real PostgreSQL integration tests
 
 React + TypeScript + Vite, NestJS + Express, PostgreSQL + `pg`, Zod,
 Three.js + React Three Fiber. Models are original procedural geometry, with no remote models or texture downloads. One API process, one database, no Redis or queues.
-REST routes are grouped by venues, shows and bookings. Shared contracts validate
-all writes. The scene stays JSONB; resources are indexed relationally for booking
+The backend uses NestJS feature modules: `AuthModule`, `AccountsModule`, `VenuesModule`,
+`EventsModule`, `BookingsModule`, `OverviewModule` and `SceneGenerationModule`. Controllers
+own HTTP routing and response headers; injectable services own business operations and SQL.
+`DatabaseModule` initializes migrations and closes its connection pool through Nest lifecycle
+hooks. Feature modules explicitly import authentication; role guards read current permissions
+from the database. The shared exception filter maps validation and database errors to safe API
+responses. Express is the HTTP adapter and supplies parsing, cookies, security headers and static
+assets; business routes are registered by Nest controllers.
+
+Explicit `@Inject(...)` tokens keep dependency injection compatible with the existing `tsx`
+runtime, which does not emit decorator type metadata. No new dependency or migration is needed.
+The `createApp(config)` entry point remains available for isolated API/browser tests, including
+per-application rate limits. Browser tests start a fresh API child process through `tsx`,
+because Playwright’s own transformer does not support Nest parameter decorators. Shared Zod
+contracts validate all writes. The scene stays JSONB; resources are indexed relationally for booking
 integrity. `revision` prevents stale layout writes. Venue row locks serialize
 layout mutations with bookings; a PostgreSQL GiST exclusion constraint independently
 rejects overlapping confirmed bookings. Intervals use `[start, end)`; back-to-back
@@ -331,3 +344,7 @@ Bootstrap actions have a null user ID. Disabling accounts retains their audit at
 Guest booking opens in dialogs: time, a wide interactive 3D seat selector, review and confirmation.
 Close or Escape keeps the current details; Continue booking reopens the flow. Closing is disabled
 while a reservation is being submitted.
+
+Potential organizer and ticketing integrations, API restrictions and a phased recommendation are
+documented in [Ticketing platforms](docs/integrations/ticketing-platforms.md). These integrations
+are researched proposals; no external account is connected.
