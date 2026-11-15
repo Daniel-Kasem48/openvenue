@@ -4,6 +4,7 @@ import { Object2D } from './scene/Object2D';
 import { useRef, useState } from 'react';
 import type { Floor, Resource, SceneObject, VenueKind } from '@openvenue/contracts';
 type Props = {
+  priceColors?: Record<string, string>;
   floor: Floor;
   kind: VenueKind;
   selected?: string;
@@ -15,6 +16,7 @@ type Props = {
   onMove: (id: string, x: number, y: number) => void;
 };
 export default function Map2D({
+  priceColors,
   floor,
   kind,
   selected,
@@ -209,7 +211,15 @@ export default function Map2D({
                 <ellipse
                   rx={r.width / 2}
                   ry={r.depth / 2}
-                  fill={active ? '#e8cfa2' : unavailable ? '#dcc0ac' : '#d6ba91'}
+                  fill={
+                    active
+                      ? '#e8cfa2'
+                      : isBlocked
+                        ? '#c6cbd1'
+                        : unavailable
+                          ? '#dcc0ac'
+                          : (priceColors?.[r.id] ?? '#d6ba91')
+                  }
                   stroke={active ? '#536d3e' : '#ab8d65'}
                   strokeWidth=".06"
                 />
@@ -221,7 +231,13 @@ export default function Map2D({
                   height={r.depth}
                   rx={r.kind === 'space' ? 0.08 : 0.22}
                   fill={
-                    active ? '#d9ecae' : isBlocked ? '#c6cbd1' : unavailable ? '#eee0d5' : '#e0e9dd'
+                    active
+                      ? '#d9ecae'
+                      : isBlocked
+                        ? '#c6cbd1'
+                        : unavailable
+                          ? '#eee0d5'
+                          : (priceColors?.[r.id] ?? '#e0e9dd')
                   }
                   stroke={active ? '#35543a' : unavailable ? '#bb9d85' : '#94ac91'}
                   strokeWidth={active ? 0.1 : 0.05}
@@ -247,6 +263,9 @@ export default function Map2D({
                     : 0.38
                 }
                 fill="#274233"
+                stroke={priceColors?.[r.id] ? 'white' : undefined}
+                strokeWidth={priceColors?.[r.id] ? 0.035 : undefined}
+                paintOrder="stroke"
                 fontWeight="600"
                 pointerEvents="none"
               >

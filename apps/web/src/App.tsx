@@ -1,6 +1,7 @@
 import { VenueSettings } from './VenueSettings';
 import { Menu } from './Menu';
 import { LayoutThumbnail } from './LayoutThumbnail';
+import { assignTier, scopedResourceIds } from './priceTiers';
 import {
   UtensilsCrossed,
   SquareParking,
@@ -28,8 +29,6 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
   reservationPrice,
   seatLocation,
-  seatIdentity,
-  seatSection,
   formatPrice,
   cloneLayout,
   intervalSchema,
@@ -136,6 +135,12 @@ export default function App() {
   const [blocked, setBlocked] = useState<string[]>([]);
   const [managingSeats, setManagingSeats] = useState(false);
   const [managedIds, setManagedIds] = useState<string[]>([]);
+  const [paintTier, setPaintTier] = useState<string | null>(null);
+  const [colourByPrice, setColourByPrice] = useState(false);
+  useEffect(() => {
+    setPaintTier(null);
+    setColourByPrice(false);
+  }, [venueId, editing, admin]);
   const [selectionScope, setSelectionScope] = useState<'seat' | 'row' | 'block'>('seat');
   useEffect(() => {
     setManagedIds([]);
@@ -157,6 +162,17 @@ export default function App() {
     current = editing && draft ? draft : venue,
     floor = current?.layout.floors[floorIndex],
     resource = floor?.resources.find((r) => r.id === selected);
+  const painting =
+    admin && editing && current?.layout.pricing.mode === 'tiers' && paintTier !== null;
+  const priceColors: Record<string, string> | undefined =
+    colourByPrice && current?.layout.pricing.mode === 'tiers'
+      ? Object.fromEntries(
+          (floor?.resources ?? []).flatMap((resource) => {
+            const tier = current.layout.pricing.tiers?.find((tier) => tier.id === resource.tierId);
+            return tier ? [[resource.id, tier.color]] : [];
+          }),
+        )
+      : undefined;
   const seatVenue = venue?.kind === 'cinema' || venue?.kind === 'stadium';
   const bookingResources = seatVenue
     ? (venue?.layout.floors
@@ -174,25 +190,14 @@ export default function App() {
     setSelectedSeats((current) => current.filter((id) => ids.has(id)));
   }, [venue]);
   const selectPlace = (id: string) => {
-    if (admin && managingSeats && floor) {
-      const seat = floor.resources.find((r) => r.id === id);
-      if (!seat) return;
-      const row = seatIdentity(seat).row;
-      const ids =
-        selectionScope === 'seat'
-          ? [id]
-          : floor.resources
-              .filter(
-                (r) =>
-                  r.kind === 'seat' &&
-                  seatSection(r) === seatSection(seat) &&
-                  (selectionScope === 'block'
-                    ? !!seatSection(seat)
-                    : !!row && seatIdentity(r).row === row),
-              )
-              .map((r) => r.id);
+    if (admin && (managingSeats || painting) && floor) {
+      const ids = scopedResourceIds(floor, id, selectionScope);
       if (!ids.length) {
         setError('This seat needs a block or row label before group selection.');
+        return;
+      }
+      if (painting && draft) {
+        updateLayout(assignTier(draft.layout, ids, paintTier!));
         return;
       }
       setManagedIds((previous) =>
@@ -1293,7 +1298,7 @@ export default function App() {
                 </div>
               )}
               <div
-                className={`${isReview ? 'hidden' : 'flex'} map-toolbar items-center gap-5 border-y border-stone-100 bg-stone-50/60 px-6 py-2.5 max-lg:gap-3 max-lg:px-4 max-sm:px-3`}
+                className={`${isReview ? 'hidden' : 'flex'} map-toolbar flex-wrap items-center gap-5 border-y border-stone-100 bg-stone-50/60 px-6 py-2.5 max-lg:gap-3 max-lg:px-4 max-sm:px-3`}
               >
                 <label className="floor-control m-0 flex-row items-center gap-2.5 text-xs text-stone-500">
                   Floor
@@ -1313,7 +1318,32 @@ export default function App() {
                     ))}
                   </select>
                 </label>
-                <div className="legend ml-auto flex gap-4 text-xs text-stone-500 max-lg:gap-2.5 max-md:hidden">
+                {current.layout.pricing.mode === 'tiers' && (
+                  <label className="check m-0 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={colourByPrice}
+                      onChange={(event) => setColourByPrice(event.target.checked)}
+                    />
+                    Colour by price
+                  </label>
+                )}
+                <div
+                  className={`legend ml-auto flex min-w-0 flex-wrap gap-4 text-xs text-stone-500 max-lg:gap-2.5 ${priceColors ? '' : 'max-md:hidden'}`}
+                >
+                  {priceColors &&
+                    current.layout.pricing.tiers?.map((tier) => (
+                      <span
+                        key={tier.id}
+                        className="flex min-w-0 max-w-full items-center gap-1.5 break-all"
+                      >
+                        <i
+                          className="size-2.5 shrink-0 rounded-sm ring-1 ring-stone-300"
+                          style={{ backgroundColor: tier.color }}
+                        />
+                        {tier.name} · {formatPrice(tier.amount, current.layout.pricing.currency)}
+                      </span>
+                    ))}
                   {(
                     [
                       ['Available', 'bg-[#d6e2d3] ring-[#9fb49b]'],
@@ -1383,7 +1413,8 @@ export default function App() {
                       selectedIds={editing ? [] : managingSeats ? managedIds : selectedSeats}
                       busy={busy}
                       blocked={blocked}
-                      editing={editing}
+                      editing={editing && !painting}
+                      priceColors={priceColors}
                       onSelect={selectPlace}
                       onMove={moveResource}
                     />
@@ -1399,7 +1430,8 @@ export default function App() {
                           busy={busy}
                           blocked={blocked}
                           onSelect={selectPlace}
-                          editing={editing}
+                          editing={editing && !painting}
+                          priceColors={priceColors}
                           onMove={moveResource}
                         />
                       </Suspense>
@@ -1426,6 +1458,14 @@ export default function App() {
                 <aside className={`inspector shrink-0 bg-white ${inspectorWidth}`}>
                   {editing ? (
                     <LayoutInspector
+                      paintTier={painting ? paintTier : null}
+                      onPaintTier={(id) => {
+                        setPaintTier(id);
+                        setSelected('');
+                        if (id !== null) setColourByPrice(true);
+                      }}
+                      scope={selectionScope}
+                      onScope={setSelectionScope}
                       view={view}
                       draft={draft!}
                       floor={floor}

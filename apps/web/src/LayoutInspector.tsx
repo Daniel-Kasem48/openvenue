@@ -1,3 +1,5 @@
+import { PriceTierEditor } from './PriceTierEditor';
+import type { SelectionScope } from './priceTiers';
 import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -13,6 +15,10 @@ import {
   type Layout,
 } from '@openvenue/contracts';
 type Props = {
+  paintTier: string | null;
+  onPaintTier: (id: string | null) => void;
+  scope: SelectionScope;
+  onScope: (scope: SelectionScope) => void;
   view: '2d' | '3d';
   draft: Venue;
   floor: Floor;
@@ -28,6 +34,10 @@ type Props = {
   importLayout: (file?: File) => Promise<void>;
 };
 export function LayoutInspector({
+  paintTier,
+  onPaintTier,
+  scope,
+  onScope,
   view,
   draft,
   floor,
@@ -208,7 +218,7 @@ export function LayoutInspector({
         )}
         {resource && (
           <div className="resource-editor">
-            {pricing.mode === 'per-resource' && (
+            {(pricing.mode === 'per-resource' || pricing.mode === 'tiers') && (
               <div className="mb-4 rounded-lg bg-forest-50/70 p-3 ring-1 ring-forest-100">
                 <label className="mb-0 text-forest-800">
                   Reservation price ({pricing.currency})
@@ -223,13 +233,24 @@ export function LayoutInspector({
                       min="0"
                       max="1000000"
                       step="0.01"
-                      value={resource.price / 100}
+                      value={resource.price === undefined ? '' : resource.price / 100}
                       onChange={(e) =>
-                        updateResource({ price: Math.round(Number(e.target.value) * 100) })
+                        updateResource({
+                          price:
+                            e.target.value === ''
+                              ? undefined
+                              : Math.round(Number(e.target.value) * 100),
+                        })
                       }
                     />
                   </span>
                 </label>
+                {pricing.mode === 'tiers' && (
+                  <p className="mt-2 text-xs text-stone-600">
+                    Tier prices take precedence. A blank reservation price uses the standard price;
+                    zero is free.
+                  </p>
+                )}
                 {resource.kind === 'seat' && seatIdentity(resource).row && (
                   <button
                     className="secondary full mt-2.5"
@@ -368,18 +389,24 @@ export function LayoutInspector({
               ? 'Free'
               : pricing.mode === 'uniform'
                 ? 'One price'
-                : 'Per place'}
+                : pricing.mode === 'tiers'
+                  ? 'Price tiers'
+                  : 'Per place'}
           </span>
         </summary>
         <label>
           Pricing mode
           <select
             value={pricing.mode}
-            onChange={(e) => setPricing({ mode: e.target.value as Layout['pricing']['mode'] })}
+            onChange={(e) => {
+              onPaintTier(null);
+              setPricing({ mode: e.target.value as Layout['pricing']['mode'] });
+            }}
           >
             <option value="free">Free reservations</option>
             <option value="uniform">Same price for every place</option>
             <option value="per-resource">Different price per seat / table / space</option>
+            <option value="tiers">Price tiers</option>
           </select>
         </label>
         {pricing.mode !== 'free' && (
@@ -398,7 +425,7 @@ export function LayoutInspector({
                   ))}
                 </select>
               </label>
-              {pricing.mode === 'uniform' && (
+              {(pricing.mode === 'uniform' || pricing.mode === 'tiers') && (
                 <label className="normal-case!">
                   Standard reservation price
                   <input
@@ -425,6 +452,16 @@ export function LayoutInspector({
               </p>
             )}
           </>
+        )}
+        {pricing.mode === 'tiers' && (
+          <PriceTierEditor
+            layout={draft.layout}
+            onChange={updateLayout}
+            paintTier={paintTier}
+            onPaintTier={onPaintTier}
+            scope={scope}
+            onScope={onScope}
+          />
         )}
       </details>
       <details className="section object-library" open>

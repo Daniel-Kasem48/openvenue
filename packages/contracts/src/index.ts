@@ -4,7 +4,22 @@ export const kindSchema = z.enum(['restaurant', 'parking', 'cinema', 'stadium'])
 export type VenueKind = z.infer<typeof kindSchema>;
 export const currencySchema = z.enum(['USD', 'EUR', 'GBP', 'AED', 'SAR', 'SYP']);
 export const pricingSchema = z.object({
-  mode: z.enum(['free', 'uniform', 'per-resource']).default('free'),
+  mode: z.enum(['free', 'uniform', 'per-resource', 'tiers']).default('free'),
+  tiers: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        name: z.string().trim().min(1).max(100),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        amount: z.number().int().min(0).max(100000000),
+      }),
+    )
+    .max(12)
+    .refine(
+      (tiers) => new Set(tiers.map((tier) => tier.id)).size === tiers.length,
+      'Tier identifiers must be unique',
+    )
+    .optional(),
   currency: currencySchema.default('USD'),
   amount: z.number().int().min(0).max(100000000).default(0),
 });
@@ -28,7 +43,8 @@ export const resourceSchema = z.object({
   depth: z.number().min(0.3).max(20),
   rotation: z.number().min(0).max(360),
   shape: z.enum(['rectangle', 'round']).default('rectangle'),
-  price: z.number().int().min(0).max(100000000).default(0),
+  price: z.number().int().min(0).max(100000000).optional(),
+  tierId: z.uuid().optional(),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -88,6 +104,8 @@ export const layoutSchema = z
       }
       const addresses = new Set<string>();
       for (const r of floor.resources) {
+        if (r.tierId && !layout.pricing.tiers?.some((tier) => tier.id === r.tierId))
+          ctx.addIssue({ code: 'custom', message: 'Resource price tier must exist' });
         if (r.kind !== 'seat') continue;
         const { row, seatNumber } = seatIdentity(r);
         if (!row || seatNumber === undefined) continue;
@@ -200,6 +218,12 @@ export const bookingSchema = z.object({
 export { makeTemplate, cloneLayout, makeObject } from './templates';
 
 export function reservationPrice(layout: Layout, resource: Resource): number {
+  if (layout.pricing.mode === 'tiers')
+    return (
+      layout.pricing.tiers?.find((tier) => tier.id === resource.tierId)?.amount ??
+      resource.price ??
+      layout.pricing.amount
+    );
   return layout.pricing?.mode === 'uniform'
     ? layout.pricing.amount
     : layout.pricing?.mode === 'per-resource'

@@ -11,12 +11,14 @@ export function stadiumSeatParts(r: Resource) {
   ] as const;
 }
 export function StadiumSeats({
+  priceColors,
   floor,
   selected,
   busy,
   blocked = [],
   onSelect,
 }: {
+  priceColors?: Record<string, string>;
   floor: Floor;
   selected: string[];
   busy: string[];
@@ -60,7 +62,7 @@ export function StadiumSeats({
                     ? '#8c96a3'
                     : reserved.has(r.id)
                       ? '#b48675'
-                      : r.color,
+                      : (priceColors?.[r.id] ?? r.color),
           ),
         );
       }
@@ -72,7 +74,7 @@ export function StadiumSeats({
         mesh.computeBoundingSphere();
         mesh.computeBoundingBox();
       }
-  }, [floor, selected, busy, blocked]);
+  }, [floor, selected, busy, blocked, priceColors]);
   return (
     <group>
       {[seat, back, base, support].map((ref, i) => (

@@ -39,6 +39,7 @@ function FitCamera({ revision, viewpoint }: { revision: number; viewpoint: Viewp
 }
 function ResourceModel({
   resource: r,
+  priceColor,
   floor,
   selected,
   reserved,
@@ -46,6 +47,7 @@ function ResourceModel({
   onSelect,
 }: {
   resource: Resource;
+  priceColor?: string;
   floor: Floor;
   selected: boolean;
   reserved: boolean;
@@ -60,15 +62,16 @@ function ResourceModel({
       ? '#8c96a3'
       : reserved
         ? '#b48675'
-        : r.kind === 'seat'
-          ? r.color
-          : r.kind === 'space'
-            ? r.ev
-              ? '#5d9e86'
-              : r.accessible
-                ? '#5b8caa'
-                : '#a6ada5'
-            : '#4c7167';
+        : (priceColor ??
+          (r.kind === 'seat'
+            ? r.color
+            : r.kind === 'space'
+              ? r.ev
+                ? '#5d9e86'
+                : r.accessible
+                  ? '#5b8caa'
+                  : '#a6ada5'
+              : '#4c7167'));
   return (
     <group
       position={[r.x - floor.width / 2, r.elevation ?? 0, r.y - floor.depth / 2]}
@@ -80,7 +83,7 @@ function ResourceModel({
       onPointerOut={() => setHovered(false)}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(r.id);
+        if (e.delta < 4) onSelect(r.id);
       }}
     >
       {r.elevation > 0 && (
@@ -152,6 +155,7 @@ function MoveHandle({
 }
 
 export default function Map3D({
+  priceColors,
   floor,
   kind,
   selected,
@@ -162,6 +166,7 @@ export default function Map3D({
   editing = false,
   onMove,
 }: {
+  priceColors?: Record<string, string>;
   floor: Floor;
   kind: VenueKind;
   selected?: string;
@@ -322,6 +327,7 @@ export default function Map3D({
               ))}
               {kind === 'stadium' ? (
                 <StadiumSeats
+                  priceColors={priceColors}
                   floor={floor}
                   selected={selected ? [...selectedIds, selected] : selectedIds}
                   busy={busy}
@@ -333,6 +339,7 @@ export default function Map3D({
                   <ResourceModel
                     key={r.id}
                     resource={r}
+                    priceColor={priceColors?.[r.id]}
                     floor={floor}
                     selected={selected === r.id || selectedIds.includes(r.id)}
                     reserved={busy.includes(r.id)}
