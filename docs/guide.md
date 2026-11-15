@@ -170,7 +170,7 @@ reservation history cannot be removed, including through import.
 ```text
 apps/web/src/          React workspace, SVG editor and lazy-loaded 3D viewer
 apps/api/src/          NestJS application bootstrap and shared helpers
-apps/api/src/modules/  Feature modules, controllers, services and repositories
+apps/api/src/modules/  Feature modules with dto/, controllers/, services/ and entities/
 apps/api/migrations/   Initial schema (idempotent, locked during initialization)
 packages/contracts/   Zod validation, shared types and four template factories
 tests/                Contract tests and real PostgreSQL integration tests
@@ -181,7 +181,12 @@ React + TypeScript + Vite, NestJS + Express, PostgreSQL + MikroORM, Zod,
 Three.js + React Three Fiber. Models are original procedural geometry, with no remote models or texture downloads. One API process, one database, no Redis or queues.
 The backend uses NestJS feature modules: `AuthModule`, `AccountsModule`, `VenuesModule`,
 `EventsModule`, `BookingsModule`, `OverviewModule` and `SceneGenerationModule`. Controllers
-own HTTP routing and response headers; injectable services own business operations and persistence.
+own HTTP routing, request validation and response headers; injectable services receive typed DTOs
+and own business operations. Each feature keeps its DTOs in `dto/`, ORM mappings in `entities/`,
+and controllers, services and custom repositories in their respective folders. DTO types are inferred
+from the shared Zod schemas; `ZodValidationPipe` applies validation, normalization and defaults at
+the controller boundary. Booking rules and response mapping live in `policies/` and `mappers/`.
+The database module registers all entity schemas without owning feature models.
 `DatabaseModule` initializes MikroORM and SQL migrations and closes the ORM through Nest lifecycle
 hooks. Feature modules explicitly import authentication; role guards read current permissions
 from the database. The shared exception filter maps validation and database errors to safe API

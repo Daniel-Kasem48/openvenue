@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeTemplate } from '@openvenue/contracts';
-import { expandBlueprint, generateScene } from '../apps/api/src/modules/scene-generation/generator';
+import {
+  expandBlueprint,
+  generateScene,
+} from '../apps/api/src/modules/scene-generation/services/generator';
 function blueprint() {
   const { id: _id, kind: _kind, ...seat } = makeTemplate('cinema').floors[0].resources[0];
   return {

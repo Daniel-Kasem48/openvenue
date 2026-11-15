@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { EventsController } from './events.controller';
-import { EventsService } from './events.service';
+import { EventsController } from './controllers/events.controller';
+import { EventsService } from './services/events.service';
 
 @Module({
   imports: [AuthModule],

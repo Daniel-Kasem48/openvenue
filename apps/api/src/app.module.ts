@@ -4,7 +4,7 @@ import { AccountsModule } from './modules/accounts/accounts.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
-import { ApiExceptionFilter } from './common/api-exception.filter';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import type { AppConfig } from './config';
 import { DatabaseModule } from './modules/database/database.module';
 import { EventsModule } from './modules/events/events.module';

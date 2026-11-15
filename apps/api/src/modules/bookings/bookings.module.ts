@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { BookingRateLimitGuard } from '../../common/rate-limit.guard';
-import { BookingsController } from './bookings.controller';
-import { BookingsService } from './bookings.service';
+import { BookingRateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { BookingsController } from './controllers/bookings.controller';
+import { BookingsService } from './services/bookings.service';
 
 @Module({
   imports: [AuthModule],

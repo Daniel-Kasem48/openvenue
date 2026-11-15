@@ -2,7 +2,9 @@ import { makeTemplate, type Layout, type VenueKind } from '@openvenue/contracts'
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { EntityManager } from '@mikro-orm/postgresql';
-import { Resource, Show, Venue } from './entities';
+import { Resource } from '../venues/entities/resource.entity';
+import { Show } from '../events/entities/show.entity';
+import { Venue } from '../venues/entities/venue.entity';
 
 export async function syncResources(em: EntityManager, venueId: string, layout: Layout) {
   const resources = layout.floors.flatMap((f) => f.resources);
