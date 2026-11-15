@@ -21,6 +21,7 @@ import {
   intervalSchema,
   makeTemplate,
   saveVenueSchema,
+  patchVenueSchema,
 } from '@openvenue/contracts';
 import { overview } from './overview';
 import { initialize, syncResources, transaction } from './database';
@@ -147,19 +148,54 @@ export async function createApp(config: {
     z.uuid().parse(id);
     next();
   });
-  router.get('/venues', async (_req, res) => {
-    res.json(
-      (
-        await pool.query(`
-      SELECT v.*, e.next_event_at AS "nextEventAt"
-      FROM venues v LEFT JOIN (
-        SELECT venue_id, min(starts_at) AS next_event_at FROM shows
-        WHERE starts_at > now() GROUP BY venue_id
-      ) e ON e.venue_id=v.id AND v.kind IN ('cinema', 'stadium')
-      ORDER BY v.name
-    `)
-      ).rows,
-    );
+  router.get(
+    '/venues',
+    (req, res, next) => {
+      const query = z.object({ includeArchived: z.enum(['0', '1']).optional() }).parse(req.query);
+      if (query.includeArchived === '1') return guard(req, res, next);
+      next();
+    },
+    async (req, res) => {
+      res.json(
+        (
+          await pool.query(
+            `SELECT v.*, v.archived_at AS "archivedAt", e.next_event_at AS "nextEventAt"
+             FROM venues v LEFT JOIN (
+               SELECT venue_id, min(starts_at) AS next_event_at FROM shows
+               WHERE starts_at > now() GROUP BY venue_id
+             ) e ON e.venue_id=v.id AND v.kind IN ('cinema','stadium')
+             WHERE ($1 OR v.archived_at IS NULL) ORDER BY v.name`,
+            [req.query.includeArchived === '1'],
+          )
+        ).rows,
+      );
+    },
+  );
+  router.patch('/venues/:id', guard, async (req, res) => {
+    const body = patchVenueSchema.parse(req.body);
+    const venue = await transaction(pool, async (client) => {
+      const old = (
+        await client.query('SELECT * FROM venues WHERE id=$1 FOR UPDATE', [req.params.id])
+      ).rows[0];
+      if (!old) fail(404, 'Venue not found');
+      if (old.revision !== body.revision)
+        fail(409, 'This venue changed elsewhere. Reload before editing.');
+      return (
+        await client.query(
+          `UPDATE venues SET name=$2, archived_at=$3, revision=revision+1 WHERE id=$1 RETURNING *, archived_at AS "archivedAt"`,
+          [
+            old.id,
+            body.name ?? old.name,
+            body.archived === undefined
+              ? old.archived_at
+              : body.archived
+                ? (old.archived_at ?? new Date())
+                : null,
+          ],
+        )
+      ).rows[0];
+    });
+    res.json(venue);
   });
   router.post('/venues', guard, async (req, res) => {
     const body = createVenueSchema.parse(req.body);
@@ -434,11 +470,12 @@ export async function createApp(config: {
       const body = bookingSchema.parse(req.body);
       const booked = await transaction(pool, async (client) => {
         const venue = (
-          await client.query('SELECT kind,layout FROM venues WHERE id=$1 FOR UPDATE', [
+          await client.query('SELECT kind,layout,archived_at FROM venues WHERE id=$1 FOR UPDATE', [
             body.venueId,
           ])
         ).rows[0];
         if (!venue) fail(404, 'Venue not found');
+        if (venue.archived_at) fail(409, 'This venue is archived and cannot receive reservations.');
         let times;
         let eventTitle: string | null = null;
         if (['cinema', 'stadium'].includes(venue.kind)) {

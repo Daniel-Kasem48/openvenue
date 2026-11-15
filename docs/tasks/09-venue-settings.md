@@ -6,7 +6,7 @@ A venue can't be deleted, and its name only changes through the layout editor sa
 
 ## Scope
 
-- Migration `005_venue_archive.sql`: `ALTER TABLE venues ADD COLUMN IF NOT EXISTS archived_at timestamptz`.
+- Migration `006_venue_archive.sql`: `ALTER TABLE venues ADD COLUMN IF NOT EXISTS archived_at timestamptz`.
 - `PATCH /venues/:id` (guarded): `{ name }` and/or `{ archived: boolean }`, with revision check.
 - `GET /venues` hides archived venues for guests; admins get them with `?includeArchived=1`.
 - Bookings of archived venues stay visible in Reservations.
@@ -16,5 +16,5 @@ A venue can't be deleted, and its name only changes through the layout editor sa
 
 ## Acceptance
 
-- [ ] API tests for rename, archive, restore, guest visibility.
-- [ ] Archived venues cannot receive new bookings (409).
+- [x] API tests for rename, archive, restore, guest visibility.
+- [x] Archived venues cannot receive new bookings (409).

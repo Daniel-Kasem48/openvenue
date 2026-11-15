@@ -1,3 +1,4 @@
+import { VenueSettings } from './VenueSettings';
 import { Menu } from './Menu';
 import { LayoutThumbnail } from './LayoutThumbnail';
 import {
@@ -93,7 +94,9 @@ export default function App() {
     [editing, setEditing] = useState(false),
     [dirty, setDirty] = useState(false),
     [tab, setTab] = useState<'map' | 'bookings' | 'overview'>('map');
-  const [modal, setModal] = useState<'login' | 'venue' | 'show' | 'generate' | null>(null),
+  const [modal, setModal] = useState<'login' | 'venue' | 'show' | 'generate' | 'settings' | null>(
+      null,
+    ),
     [source, setSource] = useState<Venue | null>(null);
   const [kind, setKind] = useState<VenueKind>('restaurant'),
     [newName, setNewName] = useState(''),
@@ -246,17 +249,29 @@ export default function App() {
       setWorking(false);
     }
   };
-  const load = async () => {
-    const data = await api<Venue[]>('/venues');
+  const load = async (signal?: AbortSignal) => {
+    const data = await api<Venue[]>(admin ? '/venues?includeArchived=1' : '/venues', { signal });
     setVenues(data.map((v) => ({ ...v, layout: layoutSchema.parse(v.layout) })));
-    setVenueId((id) => id || data.find((v) => v.kind === 'restaurant')?.id || data[0]?.id || '');
+    setVenueId((id) =>
+      data.some((v) => v.id === id && !v.archivedAt)
+        ? id
+        : data.find((v) => !v.archivedAt && v.kind === 'restaurant')?.id ||
+          data.find((v) => !v.archivedAt)?.id ||
+          '',
+    );
     setLoaded(true);
   };
   useEffect(() => {
-    load().catch((e) => {
-      setError(e.message);
-      setLoaded(true);
+    const controller = new AbortController();
+    load(controller.signal).catch((e) => {
+      if (e.name !== 'AbortError') {
+        setError(e.message);
+        setLoaded(true);
+      }
     });
+    return () => controller.abort();
+  }, [admin]);
+  useEffect(() => {
     api('/auth/me')
       .then(() => {
         setAdmin(true);
@@ -633,6 +648,7 @@ export default function App() {
       ))}
     </div>
   );
+  const activeVenues = venues.filter((v) => !v.archivedAt);
   const isReview = !admin && step === 'review';
   const stepOrder = ['venues', 'time', 'place', 'review'] as const;
   const stepIndex = stepOrder.indexOf(step as (typeof stepOrder)[number]);
@@ -693,7 +709,7 @@ export default function App() {
           </span>{' '}
           Browse venues{' '}
           <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] text-forest-100 tabular-nums">
-            {venues.length}
+            {activeVenues.length}
           </span>
         </button>
         {admin && (
@@ -714,7 +730,7 @@ export default function App() {
         )}
         <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
         <div className={sideLabel}>YOUR VENUES</div>
-        {venues.length > 6 && (
+        {activeVenues.length > 6 && (
           <input
             type="search"
             aria-label="Search venues"
@@ -726,7 +742,7 @@ export default function App() {
         )}
         <div className="venue-list -mx-1 min-h-0 overflow-auto px-1 max-sm:flex max-sm:gap-1.5 max-sm:overflow-x-auto">
           {(['restaurant', 'parking', 'cinema', 'stadium'] as const).map((kind) => {
-            const matches = venues.filter(
+            const matches = activeVenues.filter(
               (v) =>
                 v.kind === kind &&
                 `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
@@ -774,8 +790,8 @@ export default function App() {
               </div>
             );
           })}
-          {venues.length > 0 &&
-            !venues.some((v) =>
+          {activeVenues.length > 0 &&
+            !activeVenues.some((v) =>
               `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
             ) && (
               <p role="status" className="px-3 py-2 text-xs text-forest-300">
@@ -783,6 +799,42 @@ export default function App() {
               </p>
             )}
         </div>
+        {admin && venues.some((v) => v.archivedAt) && (
+          <details className="mt-3 text-xs">
+            <summary className="cursor-pointer px-3 py-2 text-forest-300">Archived</summary>
+            <div className="max-h-48 overflow-auto">
+              {venues
+                .filter((v) => v.archivedAt)
+                .map((v) => (
+                  <div key={v.id} className="flex items-center gap-2 px-3 py-2">
+                    <span className="min-w-0 flex-1 truncate" title={v.name}>
+                      {v.name}
+                    </span>
+                    <button
+                      className="shrink-0 underline"
+                      aria-label={`Restore ${v.name}`}
+                      onClick={() =>
+                        void run(async () => {
+                          const restored = await api<Venue>(
+                            `/venues/${v.id}`,
+                            json({ archived: false, revision: v.revision }, 'PATCH'),
+                          );
+                          setVenues((items) =>
+                            items.map((item) =>
+                              item.id === v.id ? { ...item, ...restored } : item,
+                            ),
+                          );
+                          setMessage(`${v.name} restored.`);
+                        })
+                      }
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </details>
+        )}
         {admin && (
           <button
             className="add-venue mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-forest-300 transition hover:bg-white/5 hover:text-white"
@@ -1056,7 +1108,7 @@ export default function App() {
               </div>
               <div className="venue-directory grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-6">
                 {venues
-                  .filter((v) => filter === 'all' || v.kind === filter)
+                  .filter((v) => !v.archivedAt && (filter === 'all' || v.kind === filter))
                   .map((v) => (
                     <article
                       className="panel directory-card flex flex-col transition duration-200 hover:-translate-y-0.5 hover:shadow-float"
@@ -1094,7 +1146,7 @@ export default function App() {
                     </article>
                   ))}
               </div>
-              {loaded && !venues.some((v) => filter === 'all' || v.kind === filter) && (
+              {loaded && !activeVenues.some((v) => filter === 'all' || v.kind === filter) && (
                 <p className="empty">No venues in this category yet.</p>
               )}
               {!loaded && <p className="empty">Loading venues…</p>}
@@ -1276,6 +1328,13 @@ export default function App() {
                           items={[
                             { label: 'Duplicate', onSelect: () => openCreate(current) },
                             { label: 'Generate with Claude', onSelect: () => setModal('generate') },
+                            {
+                              label: 'Venue settings',
+                              onSelect: () => {
+                                setError('');
+                                setModal('settings');
+                              },
+                            },
                           ]}
                         />
                       )}
@@ -1727,6 +1786,35 @@ export default function App() {
           )}
         </div>
       </main>
+      {modal === 'settings' && current && (
+        <VenueSettings
+          venue={current}
+          working={working}
+          error={error}
+          onClose={() => setModal(null)}
+          onSave={(patch) =>
+            void run(async () => {
+              const updated = await api<Venue>(
+                `/venues/${current.id}`,
+                json({ ...patch, revision: current.revision }, 'PATCH'),
+              );
+              setVenues((items) =>
+                items.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
+              );
+              setModal(null);
+              if (updated.archivedAt) {
+                setStep('venues');
+                setVenueId(activeVenues.find((v) => v.id !== updated.id)?.id ?? '');
+              }
+              setMessage(
+                updated.archivedAt
+                  ? 'Venue archived. Existing reservations were kept.'
+                  : 'Venue settings saved.',
+              );
+            })
+          }
+        />
+      )}
       {modal === 'generate' && current && (
         <GenerateSceneDialog
           venueId={current.id}

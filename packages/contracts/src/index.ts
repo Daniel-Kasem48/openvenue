@@ -123,6 +123,7 @@ export const venueSchema = z.object({
   kind: kindSchema,
   layout: layoutSchema,
   revision: z.number().int().nonnegative(),
+  archivedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   nextEventAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
 export type Venue = z.infer<typeof venueSchema>;
@@ -149,6 +150,14 @@ export const createVenueSchema = z.object({
   sourceId: uuid.optional(),
   empty: z.boolean().default(false),
 });
+export const patchVenueSchema = z
+  .object({
+    name: name.optional(),
+    archived: z.boolean().optional(),
+    revision: z.number().int().min(1),
+  })
+  .strict()
+  .refine((v) => v.name !== undefined || v.archived !== undefined, 'Choose a setting to update');
 export const saveVenueSchema = z.object({
   name,
   layout: layoutSchema,

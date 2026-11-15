@@ -249,3 +249,8 @@ brings that venue into view.
 
 Guest checkout checks the event dates reviewed in the browser. If an operator reschedules the
 event before confirmation, the guest sees the updated schedule and must confirm again.
+
+Venue settings in the actions menu rename a venue without editing its layout. Archiving requires
+typing its current name, hides it from guests and blocks new reservations while retaining existing
+records. Administrators can restore venues from the collapsed Archived sidebar group. Changes
+check the venue revision so concurrent edits cannot silently overwrite each other.

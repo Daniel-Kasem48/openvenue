@@ -48,17 +48,79 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
       ['2092-01-01T12:00:00Z', '2092-01-01T14:00:00Z'],
       ['2091-01-01T12:00:00Z', '2091-01-01T14:00:00Z'],
     ])
-      await pool.query('INSERT INTO shows VALUES(gen_random_uuid(),$1,$2,$3,$4)', [
-        cinema.id,
-        'Preview event',
-        start,
-        end,
-      ]);
+      await pool.query(
+        'INSERT INTO shows(id,venue_id,title,starts_at,ends_at) VALUES(gen_random_uuid(),$1,$2,$3,$4)',
+        [cinema.id, 'Preview event', start, end],
+      );
     const listed = await (await request('/venues')).json();
     expect(listed.find((v: any) => v.id === cinema.id).nextEventAt).toBe(
       '2091-01-01T12:00:00.000Z',
     );
     expect(listed.find((v: any) => v.id === venue.id).nextEventAt).toBeNull();
+  });
+  it('renames, archives and restores venues without losing reservation history', async () => {
+    const v = await (
+      await request('/venues', { kind: 'parking', name: 'Archive test venue' }, true)
+    ).json();
+    const path = `/venues/${v.id}`;
+    expect((await request(path, { name: 'Hidden' }, false, 'PATCH')).status).toBe(401);
+    expect(
+      (await request(path, { name: 'Renamed venue', revision: v.revision }, true, 'PATCH')).status,
+    ).toBe(200);
+    expect(
+      (await request(path, { archived: true, revision: v.revision }, true, 'PATCH')).status,
+    ).toBe(409);
+    const booking = await (
+      await request('/bookings', {
+        venueId: v.id,
+        resourceId: v.layout.floors[0].resources[0].id,
+        guestName: 'Archive Guest',
+        ...interval,
+      })
+    ).json();
+    const archived = await request(
+      path,
+      { archived: true, revision: v.revision + 1 },
+      true,
+      'PATCH',
+    );
+    expect(archived.status).toBe(200);
+    expect((await archived.json()).archivedAt).toBeTruthy();
+    expect((await (await request('/venues')).json()).some((item: any) => item.id === v.id)).toBe(
+      false,
+    );
+    expect((await request('/venues?includeArchived=1')).status).toBe(401);
+    expect(
+      (await (await request('/venues?includeArchived=1', undefined, true)).json()).some(
+        (item: any) => item.id === v.id,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await request('/bookings', {
+          venueId: v.id,
+          resourceId: v.layout.floors[0].resources[1].id,
+          guestName: 'Late Guest',
+          ...interval,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (await (await request('/bookings', undefined, true)).json()).some(
+        (item: any) => item.id === booking.id,
+      ),
+    ).toBe(true);
+    const restored = await request(
+      path,
+      { archived: false, revision: v.revision + 2 },
+      true,
+      'PATCH',
+    );
+    expect(restored.status).toBe(200);
+    expect((await restored.json()).archivedAt).toBeNull();
+    expect(
+      (await (await request('/venues')).json()).find((item: any) => item.id === v.id).name,
+    ).toBe('Renamed venue');
   });
   it('protects admin data and rejects cross-origin mutations', async () => {
     expect((await request('/bookings')).status).toBe(401);

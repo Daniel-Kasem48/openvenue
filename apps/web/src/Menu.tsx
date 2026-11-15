@@ -30,11 +30,7 @@ export function Menu({
       ref={root}
       className="relative"
       onBlur={(event) => {
-        if (
-          event.relatedTarget === trigger.current ||
-          !event.currentTarget.contains(event.relatedTarget as Node)
-        )
-          setOpen(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false);
       }}
     >
       <button
@@ -72,7 +68,7 @@ export function Menu({
             ];
             const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
             const key = event.key;
-            if (key === 'Escape') {
+            if (key === 'Escape' || (key === 'Tab' && event.shiftKey)) {
               event.preventDefault();
               setOpen(false);
               trigger.current?.focus();

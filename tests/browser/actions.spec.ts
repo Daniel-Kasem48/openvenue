@@ -9,6 +9,10 @@ test('venue action menu supports keyboard, outside click and dirty save state', 
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.locator('.venue-list button').first().click();
   const trigger = page.getByRole('button', { name: 'More venue actions' });
+  await trigger.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await trigger.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await trigger.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitem', { name: 'Duplicate', exact: true })).toBeFocused();
@@ -22,7 +26,7 @@ test('venue action menu supports keyboard, outside click and dirty save state', 
   await expect(trigger).toBeFocused();
   await expect(page.getByRole('menu')).toHaveCount(0);
   await trigger.press('ArrowUp');
-  await expect(page.getByRole('menuitem', { name: 'Generate with Claude' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Venue settings' })).toBeFocused();
   await page.locator('.venue-panel h2').click();
   await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button', { name: 'Edit layout', exact: true }).click();
