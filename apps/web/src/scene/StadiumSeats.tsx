@@ -51,7 +51,7 @@ export function StadiumSeats({
           i,
           color.set(
             mesh === support.current
-              ? '#9ca4a5'
+              ? '#87918d'
               : mesh === base.current
                 ? '#343c3c'
                 : selectedSet.has(r.id)

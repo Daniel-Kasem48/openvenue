@@ -1,3 +1,5 @@
+import { Color } from 'three';
+
 export function StadiumPitch({
   width,
   depth,
@@ -13,7 +15,7 @@ export function StadiumPitch({
     <group scale={[width / 38, height / 2, depth / 24]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
         <planeGeometry args={[36, 24]} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={color} roughness={1} />
       </mesh>
       {Array.from({ length: 6 }, (_, i) => (
         <mesh
@@ -23,7 +25,7 @@ export function StadiumPitch({
           receiveShadow
         >
           <planeGeometry args={[3, 24]} />
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color={new Color(color).multiplyScalar(0.87)} roughness={1} />
         </mesh>
       ))}
       {[
@@ -41,12 +43,22 @@ export function StadiumPitch({
       ].map(([x, z, w, d], i) => (
         <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.035, z]}>
           <planeGeometry args={[w, d]} />
-          <meshBasicMaterial color="#f1f5e7" />
+          <meshBasicMaterial
+            color="#f1f5e7"
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
         </mesh>
       ))}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
         <ringGeometry args={[2.9, 3, 48]} />
-        <meshBasicMaterial color="#f1f5e7" />
+        <meshBasicMaterial
+          color="#f1f5e7"
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
       </mesh>
       {[-18.5, 18.5].map((x) => (
         <group key={x} position={[x, 0, 0]}>

@@ -177,7 +177,7 @@ export function CinemaChair({ color = '#935460' }: { color?: string }) {
             size={[0.15, 0.09, 0.71]}
             at={[side * 0.41, 0.73, 0]}
             color="#47414b"
-            radius={0.04}
+            radius={0.05}
           />
           <Cylinder at={[side * 0.41, 0.785, -0.2]} radius={0.047} height={0.015} color="#151a23" />
         </group>

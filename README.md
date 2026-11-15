@@ -12,7 +12,7 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Cinema: 48 upholstered seats with armrests, screen, acoustic partitions, foyer, concessions and administrator-created showtimes.
 - Stadium: 984 priced seats in four rising stands (12 rows north/east/west, 16 south), an editable football pitch, entrances, scoreboard and concessions.
 - SVG map editor: drag, numeric position/size/rotation, labels, floors, resources.
-- 3D opens by default: rounded furniture, detailed vehicles, shaded materials, orbit/zoom, camera fitting, selection and availability. Editing switches to 2D. Camera buttons offer overview, top and four side views; drag to rotate, Ctrl + drag (or right-drag) to pan, and pinch/scroll to zoom. Selection and review preserve the current camera; use a viewpoint button or Reset view to reframe.
+- 3D opens by default: rounded furniture, detailed vehicles, soft directional shadows, neutral floors and a striped stadium pitch, orbit/zoom, camera fitting, selection and availability. Cinema retains its dark theme; lighting is procedural and needs no external environment downloads. Editing switches to 2D. Camera buttons offer overview, top and four side views; drag to rotate, Ctrl + drag (or right-drag) to pan, and pinch/scroll to zoom. Selection and review preserve the current camera; use a viewpoint button or Reset view to reframe.
 - Fourteen editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers, barriers, pitches and text/number labels. Position, size, height, rotation and color persist in the shared layout.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.

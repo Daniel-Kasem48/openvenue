@@ -181,8 +181,12 @@ export default function Map3D({
       className={'map-stage three-stage ' + (dark ? 'cinema-stage' : '')}
       aria-label="3D floor plan"
     >
-      <div className="scene-caption pointer-events-none absolute top-5 left-6 z-[2] flex flex-col gap-1.5 text-ink max-sm:top-4 max-sm:left-4">
-        <span className="scene-tag flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] text-forest-600">
+      <div
+        className={`scene-caption pointer-events-none absolute top-5 left-6 z-[2] flex flex-col gap-1.5 max-sm:top-4 max-sm:left-4 ${dark ? 'text-stone-100' : 'text-ink'}`}
+      >
+        <span
+          className={`scene-tag flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] ${dark ? 'text-stone-300' : 'text-forest-600'}`}
+        >
           <i className="live-dot" />
           LIVE 3D
         </span>
@@ -193,30 +197,35 @@ export default function Map3D({
               ? 'A smoother arrival'
               : 'The best seat in the house'}
         </strong>
-        <small className="text-xs text-stone-500">
+        <small className={`text-xs ${dark ? 'text-stone-300' : 'text-stone-500'}`}>
           {floor.name} · {floor.resources.length} bookable places
         </small>
         {selected && <span className="object-label mt-1 self-start">Selected: {item?.label}</span>}
       </div>
       <Canvas
         frameloop="demand"
-        shadows
+        shadows="soft"
         dpr={[1, 1.5]}
         camera={{ position: [size * 0.65, size * 0.75, size * 0.85], fov: 42 }}
         gl={{ antialias: true }}
       >
-        <color attach="background" args={[dark ? '#232b39' : '#eceee8']} />
-        <hemisphereLight args={[dark ? '#d5d9f2' : '#fff6e5', dark ? '#42445c' : '#a6b5a0', 2]} />
+        <color attach="background" args={[dark ? '#232b39' : '#f6f5f1']} />
+        <hemisphereLight
+          args={[dark ? '#d5d9f2' : '#f4f6ff', dark ? '#303044' : '#82796d', dark ? 0.65 : 0.85]}
+        />
         <directionalLight
-          position={[8, 18, 10]}
-          intensity={dark ? 2 : 3.2}
+          position={[size * 0.45, size * 0.9, size * 0.6]}
+          intensity={dark ? 1.8 : 2.2}
+          color={dark ? '#e2e6ff' : '#fff5e8'}
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-camera-left={-size}
           shadow-camera-right={size}
           shadow-camera-top={size}
           shadow-camera-bottom={-size}
-          shadow-bias={-0.0005}
+          shadow-camera-far={size * 3}
+          shadow-normalBias={0.035}
+          shadow-bias={-0.0001}
         />
         <Suspense fallback={null}>
           <Bounds fit clip margin={1.15} maxDuration={0.35}>
@@ -225,7 +234,7 @@ export default function Map3D({
               <mesh receiveShadow position={[0, -0.15, 0]}>
                 <boxGeometry args={[floor.width + 0.4, 0.3, floor.depth + 0.4]} />
                 <meshStandardMaterial
-                  color={dark ? '#333545' : kind === 'parking' ? '#747e80' : '#d4c5ac'}
+                  color={dark ? '#333545' : kind === 'parking' ? '#747e80' : '#d7d5ce'}
                   roughness={0.92}
                 />
               </mesh>
@@ -248,8 +257,8 @@ export default function Map3D({
                             ? '#7e8989'
                             : '#7b8686'
                           : i % 2
-                            ? '#ded1b9'
-                            : '#d8c9af'
+                            ? '#e6e4dd'
+                            : '#e2e0d9'
                     }
                     roughness={0.9}
                   />
@@ -257,11 +266,11 @@ export default function Map3D({
               ))}
               <mesh position={[0, 0.6, -floor.depth / 2]} castShadow receiveShadow>
                 <boxGeometry args={[floor.width, 1.2, 0.18]} />
-                <meshStandardMaterial color={dark ? '#444558' : '#d7d8c9'} />
+                <meshStandardMaterial color={dark ? '#444558' : '#d3d6ce'} />
               </mesh>
               <mesh position={[-floor.width / 2, 0.6, 0]} castShadow receiveShadow>
                 <boxGeometry args={[0.18, 1.2, floor.depth]} />
-                <meshStandardMaterial color={dark ? '#444558' : '#d7d8c9'} />
+                <meshStandardMaterial color={dark ? '#444558' : '#d3d6ce'} />
               </mesh>
               <group position={[-floor.width / 2, 0, -floor.depth / 2]}>
                 {(floor.objects ?? []).map((o) => (
