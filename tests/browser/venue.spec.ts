@@ -753,6 +753,7 @@ test('generated scenes are previewed before applying and saved only on explicit 
   await page.getByLabel('Venue name').fill(name);
   await page.getByLabel('Starting layout').selectOption('empty');
   await page.getByRole('button', { name: 'Create venue' }).click();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   const venue = (await (await page.request.get('/api/venues')).json()).find(
     (v: any) => v.name === name,
   );
