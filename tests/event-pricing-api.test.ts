@@ -165,6 +165,48 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('event pricing API', () => {
       (await pool.query('SELECT price,status FROM bookings WHERE id=$1', [saved.id])).rows[0],
     ).toEqual({ price: 7, status: 'cancelled' });
   });
+  it('rejects layout increases and tier unassignment that overflow an active event quote', async () => {
+    const { venue, tierId, shows, path } = await fixture();
+    const save = (layout: any, revision = venue.revision) =>
+      call(`/venues/${venue.id}`, { name: venue.name, revision, layout }, 'PUT');
+    venue.layout.pricing.tiers[0].amount = 50000000;
+    const initial = await save(venue.layout);
+    expect(initial.status).toBe(200);
+    venue.revision = (await initial.json()).revision;
+    expect((await call(path, { multiplier: 2, overrides: [] }, 'PUT')).status).toBe(200);
+    for (const fallback of ['tier', 'resource', 'base']) {
+      const proposed = structuredClone(venue.layout);
+      if (fallback === 'tier') proposed.pricing.tiers[0].amount = 60000000;
+      else {
+        const seat = proposed.floors[0].resources[0];
+        delete seat.tierId;
+        if (fallback === 'resource') seat.price = 60000000;
+        else {
+          delete seat.price;
+          proposed.pricing.amount = 60000000;
+        }
+      }
+      expect((await save(proposed)).status).toBe(400);
+      const persisted = (await (await call('/venues')).json()).find((v: any) => v.id === venue.id);
+      expect(persisted.revision).toBe(venue.revision);
+      expect(persisted.layout).toEqual(venue.layout);
+      const quote = await call(
+        `/venues/${venue.id}/availability?${new URLSearchParams({
+          start: shows[0].start,
+          end: shows[0].end,
+          showId: shows[0].id,
+        })}`,
+      );
+      expect(quote.status).toBe(200);
+      expect((await quote.json()).prices[venue.layout.floors[0].resources[0].id]).toBe(100000000);
+    }
+    // A zero override protects the assigned tier, so a higher base remains valid.
+    expect(
+      (await call(path, { multiplier: 2, overrides: [{ tierId, amount: 0 }] }, 'PUT')).status,
+    ).toBe(200);
+    venue.layout.pricing.tiers[0].amount = 60000000;
+    expect((await save(venue.layout)).status).toBe(200);
+  });
   it('deletes an unbooked event with tier overrides', async () => {
     const { venue, tierId, shows, path } = await fixture();
     expect(

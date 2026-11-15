@@ -248,6 +248,22 @@ export async function createApp(config: {
       }[old.kind as 'restaurant' | 'parking' | 'cinema' | 'stadium'];
       if (body.layout.floors.some((f) => f.resources.some((r) => r.kind !== resourceKind)))
         fail(400, 'Resource type does not match this venue');
+      const eventPrices = await client.query(
+        `SELECT s.price_multiplier,
+          coalesce(json_agg(json_build_object('tierId', p.tier_id, 'amount', p.amount))
+            FILTER (WHERE p.tier_id IS NOT NULL), '[]') AS overrides
+        FROM shows s LEFT JOIN show_prices p ON p.show_id=s.id
+        WHERE s.venue_id=$1 AND s.ends_at>now() GROUP BY s.id`,
+        [old.id],
+      );
+      const resources = body.layout.floors.flatMap((floor) => floor.resources);
+      for (const row of eventPrices.rows) {
+        const pricing = eventPricingSchema.parse({
+          multiplier: Number(row.price_multiplier),
+          overrides: row.overrides,
+        });
+        for (const resource of resources) reservationPrice(body.layout, resource, pricing);
+      }
       await syncResources(client, old.id, body.layout);
       return (
         await client.query(

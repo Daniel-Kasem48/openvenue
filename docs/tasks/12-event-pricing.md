@@ -67,3 +67,9 @@ The provisioned isolated PostgreSQL database on port 55439 substitutes for Docke
 Final checks: 78 unit/API tests and all 36 browser tests passed. TypeScript, production build,
 Prettier and `git diff --check` passed. Browser coverage includes the existing camera, venue
 settings, archive, event-management, tier-painting and seat-blocking workflows.
+
+Layout-save regression: proposed layouts are checked against all ongoing/future event prices
+under the same venue lock before resources or revisions change. Tests reject tier increases
+and tier unassignment exposing overflowing resource/base prices, preserve the previous quote,
+and allow a zero event override to protect a higher tier price. The regression failed with
+an incorrect 200 before the fix; all 79 unit/API tests passed afterward.
