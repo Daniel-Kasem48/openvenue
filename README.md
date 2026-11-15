@@ -290,3 +290,20 @@ Venue settings in the actions menu rename a venue without editing its layout. Ar
 typing its current name, hides it from guests and blocks new reservations while retaining existing
 records. Administrators can restore venues from the collapsed Archived sidebar group. Changes
 check the venue revision so concurrent edits cannot silently overwrite each other.
+
+## Public booking links and embeds
+
+Share `/book/<venue-id>` with guests to open Time → Place → Review → Done without the workspace
+sidebar or administrator controls. Add `?show=<event-id>` to preselect a cinema screening or
+stadium event. Public pages remain guest-only even when an administrator is signed in. Invalid,
+archived or missing venue/event links show an unavailable message instead of opening another venue.
+
+Operators can use **More venue actions → Share booking link** to copy the current venue/event
+link, or **Embed** to get an iframe snippet. `embed=1` removes the hero and footer while keeping
+the booking steps and confirmation. Both flows use the existing availability, prices and stale
+checkout recovery; they do not collect payment.
+
+In production, `PUBLIC_ORIGIN` supplies the canonical HTTPS origin for shared links. Development
+and instances without a configured origin use the browser's current origin. Only `/book/<id>` documents permit
+HTTP(S) frame ancestors and omit `X-Frame-Options`; workspace pages and API responses retain
+same-origin framing protection. This does not relax the API's cross-origin mutation checks.

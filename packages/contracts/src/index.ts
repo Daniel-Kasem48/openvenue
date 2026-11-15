@@ -3,6 +3,9 @@ const uuid = z.uuid().transform((value) => value.toLowerCase());
 const priceAmountSchema = z.number().int().min(0).max(100000000);
 export const kindSchema = z.enum(['restaurant', 'parking', 'cinema', 'stadium']);
 export type VenueKind = z.infer<typeof kindSchema>;
+export const publicConfigSchema = z.object({
+  publicOrigin: z.url({ protocol: /^https?$/ }).nullable(),
+});
 export const currencySchema = z.enum(['USD', 'EUR', 'GBP', 'AED', 'SAR', 'SYP']);
 export const pricingSchema = z.object({
   mode: z.enum(['free', 'uniform', 'per-resource', 'tiers']).default('free'),

@@ -64,17 +64,23 @@ export async function createApp(config: {
   };
   const router = express.Router(),
     { matches, guard } = authentication(pool, config.adminPassword);
-  app.use(
+  const securityHeaders = (embeddable: boolean) =>
     helmet({
+      frameguard: embeddable ? false : { action: 'sameorigin' },
       contentSecurityPolicy: {
         directives: {
+          'frame-ancestors': embeddable ? ["'self'", 'http:', 'https:'] : ["'self'"],
           'script-src': ["'self'"],
           'worker-src': ["'self'", 'blob:'],
           'img-src': ["'self'", 'data:', 'blob:'],
           'upgrade-insecure-requests': config.secureCookies ? [] : null,
         },
       },
-    }),
+    });
+  const publicHeaders = securityHeaders(true),
+    workspaceHeaders = securityHeaders(false);
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) =>
+    (/^\/book\/[^/]+\/?$/.test(req.path) ? publicHeaders : workspaceHeaders)(req, res, next),
   );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
@@ -99,6 +105,9 @@ export async function createApp(config: {
     path: '/api',
     maxAge: 8 * 3600000,
   };
+  router.get('/public-config', (_req, res) =>
+    res.json({ publicOrigin: config.publicOrigin ?? null }),
+  );
   router.get('/health', async (_req, res) => {
     await pool.query('SELECT 1');
     res.json({ status: 'ok' });

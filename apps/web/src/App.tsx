@@ -1,4 +1,9 @@
 import { EventPricingCard } from './EventPricingCard';
+import { BookingConfirmation } from './booking/BookingConfirmation';
+import { BookingProgress, type BookingStep } from './booking/BookingProgress';
+import { BookingEmbed } from './booking/BookingEmbed';
+import type { PublicBookingRoute } from './booking/publicRoute';
+import { reserveBooking } from './booking/reserve';
 import { VenueSettings } from './VenueSettings';
 import { Menu } from './Menu';
 import { LayoutThumbnail } from './LayoutThumbnail';
@@ -12,7 +17,6 @@ import {
   LayoutGrid,
   CalendarCheck,
   ArrowUpRight,
-  Check,
   Map,
   Box,
   MapPin,
@@ -28,6 +32,7 @@ import { GenerateSceneDialog } from './GenerateSceneDialog';
 import { LayoutInspector } from './LayoutInspector';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
+  publicConfigSchema,
   reservationPrice,
   seatLocation,
   formatPrice,
@@ -70,8 +75,10 @@ const types: Record<
     description: 'Every seat has a story',
   },
 };
-export default function App() {
-  const [step, setStep] = useState<'venues' | 'time' | 'place' | 'review' | 'done'>('venues');
+export default function App({ publicBooking }: { publicBooking?: PublicBookingRoute }) {
+  const [step, setStep] = useState<BookingStep>(publicBooking ? 'time' : 'venues');
+  const [publicError, setPublicError] = useState(publicBooking?.error ?? '');
+  const [embedUrl, setEmbedUrl] = useState('');
   const [confirmation, setConfirmation] = useState<(Booking & { bookings?: Booking[] }) | null>(
     null,
   );
@@ -80,7 +87,7 @@ export default function App() {
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [filter, setFilter] = useState<VenueKind | 'all'>('all');
   const [venues, setVenues] = useState<Venue[]>([]),
-    [venueId, setVenueId] = useState(''),
+    [venueId, setVenueId] = useState(publicBooking?.venueId ?? ''),
     [draft, setDraft] = useState<Venue | null>(null);
   const [venueSearch, setVenueSearch] = useState('');
   const selectedVenueButton = useRef<HTMLButtonElement>(null);
@@ -272,21 +279,29 @@ export default function App() {
     }
   };
   const load = async (signal?: AbortSignal) => {
+    if (publicBooking?.error) return;
     const data = await api<Venue[]>(admin ? '/venues?includeArchived=1' : '/venues', { signal });
     setVenues(data.map((v) => ({ ...v, layout: layoutSchema.parse(v.layout) })));
-    setVenueId((id) =>
-      data.some((v) => v.id === id && !v.archivedAt)
-        ? id
-        : data.find((v) => !v.archivedAt && v.kind === 'restaurant')?.id ||
-          data.find((v) => !v.archivedAt)?.id ||
-          '',
-    );
+    if (publicBooking) {
+      const requested = data.find((v) => v.id === publicBooking.venueId && !v.archivedAt);
+      if (!requested) setPublicError('This venue is unavailable or archived.');
+      else if (publicBooking.showId && !['cinema', 'stadium'].includes(requested.kind))
+        setPublicError('This event is not available for this venue.');
+    } else
+      setVenueId((id) =>
+        data.some((v) => v.id === id && !v.archivedAt)
+          ? id
+          : data.find((v) => !v.archivedAt && v.kind === 'restaurant')?.id ||
+            data.find((v) => !v.archivedAt)?.id ||
+            '',
+      );
     setLoaded(true);
   };
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal).catch((e) => {
       if (e.name !== 'AbortError') {
+        if (publicBooking) setPublicError(e.message);
         setError(e.message);
         setLoaded(true);
       }
@@ -294,6 +309,7 @@ export default function App() {
     return () => controller.abort();
   }, [admin]);
   useEffect(() => {
+    if (publicBooking) return;
     api('/auth/me')
       .then(() => {
         setAdmin(true);
@@ -302,17 +318,22 @@ export default function App() {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    if (!venueId) return;
+    if (!venueId || publicBooking?.error) return;
     const controller = new AbortController();
     setShows([]);
     setShowId('');
     api<Show[]>(`/venues/${venueId}/shows`, { signal: controller.signal })
       .then((data) => {
         setShows(data);
-        setShowId(data[0]?.id ?? '');
+        if (publicBooking?.showId && !data.some((show) => show.id === publicBooking.showId))
+          setPublicError('This event is unavailable or does not belong to this venue.');
+        setShowId(publicBooking?.showId ?? data[0]?.id ?? '');
       })
       .catch((e) => {
-        if (e.name !== 'AbortError') setError(e.message);
+        if (e.name !== 'AbortError') {
+          if (publicBooking) setPublicError(e.message);
+          setError(e.message);
+        }
       });
     return () => controller.abort();
   }, [venueId]);
@@ -475,9 +496,8 @@ export default function App() {
   const reserve = () =>
     run(async () => {
       if (!venue || !bookingResources.length || !interval || !canReserve) return;
-      const booking = await api<Booking & { bookings?: Booking[] }>(
-        '/bookings',
-        json({
+      const booking = await reserveBooking(
+        {
           venueId: venue.id,
           resourceId: bookingResources[0].id,
           ...(seatVenue ? { resourceIds: bookingResources.map((r) => r.id) } : {}),
@@ -489,13 +509,13 @@ export default function App() {
           guestPhone: guestPhone.trim() || undefined,
           ...interval,
           ...(seatVenue ? { showId } : {}),
-        }),
-      ).catch(async (error) => {
-        if (seatVenue) setShows(await api<Show[]>(`/venues/${venueId}/shows`));
-        await load();
-        setRefresh((v) => v + 1);
-        throw error;
-      });
+        },
+        async () => {
+          if (seatVenue) setShows(await api<Show[]>(`/venues/${venueId}/shows`));
+          await load();
+          setRefresh((v) => v + 1);
+        },
+      );
       setConfirmation(booking);
       setStep('done');
       setRefresh((v) => v + 1);
@@ -600,9 +620,7 @@ export default function App() {
               ))}
             </select>
           </label>
-          {shows.length === 0 && (
-            <p className="muted">No upcoming shows. An administrator can add one.</p>
-          )}
+          {shows.length === 0 && <p className="muted">No upcoming shows are available.</p>}
           {admin && (
             <button className="text-button" onClick={() => openShow()}>
               + {venue?.kind === 'stadium' ? 'Add event' : 'Add showtime'}
@@ -646,13 +664,28 @@ export default function App() {
     (seatVenue
       ? bookingResources.length === partySize
       : !!resource && resource.capacity >= partySize);
-  const confirmed = confirmation ? (confirmation.bookings ?? [confirmation]) : [];
+  const shareBooking = (embed: boolean) =>
+    void run(async () => {
+      if (!venue) return;
+      const { publicOrigin } = publicConfigSchema.parse(await api('/public-config'));
+      const url = new URL(`/book/${venue.id}`, publicOrigin ?? window.location.origin);
+      if (seatVenue && showId) url.searchParams.set('show', showId);
+      if (embed) setEmbedUrl(url.href);
+      else {
+        await navigator.clipboard.writeText(url.href);
+        setMessage('Booking link copied.');
+      }
+    });
   const directory = () => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
     setEditing(false);
     setDirty(false);
     setTab('map');
-    setStep('venues');
+    setStep(publicBooking ? 'time' : 'venues');
+    if (publicBooking) {
+      setSelected('');
+      setSelectedSeats([]);
+    }
     setConfirmation(null);
     setMessage('');
   };
@@ -677,8 +710,6 @@ export default function App() {
   );
   const activeVenues = venues.filter((v) => !v.archivedAt);
   const isReview = !admin && step === 'review';
-  const stepOrder = ['venues', 'time', 'place', 'review'] as const;
-  const stepIndex = stepOrder.indexOf(step as (typeof stepOrder)[number]);
   const navItem = (active: boolean) =>
     `nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition max-sm:mb-1 max-sm:inline-flex max-sm:w-auto max-sm:self-start ${
       active ? 'bg-white/10 text-white' : 'text-forest-200 hover:bg-white/5 hover:text-white'
@@ -690,259 +721,287 @@ export default function App() {
     : editing
       ? 'border-stone-100 p-5 max-lg:w-full max-lg:border-t lg:w-[330px] lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:[scrollbar-gutter:stable]'
       : 'border-stone-100 p-6 max-lg:w-full max-lg:border-t lg:w-[300px] lg:border-l 2xl:w-[340px] 2xl:p-7';
+  if (publicBooking && publicError)
+    return (
+      <main className="mx-auto max-w-xl p-6">
+        <h1>Booking unavailable</h1>
+        <p className="mt-4" role="alert">
+          {publicError}
+        </p>
+      </main>
+    );
   return (
-    <div className="shell flex min-h-screen max-sm:block" inert={working} aria-busy={working}>
-      <aside className="sidebar sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-forest-950 px-4 pt-6 pb-4 text-forest-100 max-lg:w-56 max-sm:relative max-sm:h-auto max-sm:w-full max-sm:py-3">
-        <a
-          href="/"
-          className="brand mb-9 flex items-center gap-2.5 px-2 font-display text-[19px] font-bold tracking-[-0.03em] text-white max-sm:mb-3"
-        >
-          <span className="grid size-8 place-items-center rounded-lg bg-sprout-300 text-[17px] text-forest-950">
-            <Layers
-              className="size-5 inline-block shrink-0"
-              aria-hidden="true"
-              strokeWidth={1.75}
-            />
-          </span>{' '}
-          openvenue
-          <span className="ml-0.5 rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-forest-200 max-lg:hidden">
-            BETA
-          </span>
-        </a>
-        <div className={sideLabel}>YOUR WORKSPACE</div>
-        {admin && (
-          <button
-            className={navItem(tab === 'overview')}
-            onClick={() => {
-              if (dirty && !confirm('Discard unsaved layout changes?')) return;
-              setEditing(false);
-              setDirty(false);
-              setTab('overview');
-            }}
+    <div
+      className={
+        publicBooking ? 'public-booking min-h-screen' : 'shell flex min-h-screen max-sm:block'
+      }
+      inert={working}
+      aria-busy={working}
+    >
+      {!publicBooking && (
+        <aside className="sidebar sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-forest-950 px-4 pt-6 pb-4 text-forest-100 max-lg:w-56 max-sm:relative max-sm:h-auto max-sm:w-full max-sm:py-3">
+          <a
+            href="/"
+            className="brand mb-9 flex items-center gap-2.5 px-2 font-display text-[19px] font-bold tracking-[-0.03em] text-white max-sm:mb-3"
           >
-            Overview
-          </button>
-        )}
-        <button className={navItem(tab === 'map')} onClick={directory}>
-          <span className="text-base opacity-80">
-            <LayoutGrid
-              className="size-5 inline-block shrink-0"
-              aria-hidden="true"
-              strokeWidth={1.75}
-            />
-          </span>{' '}
-          Browse venues{' '}
-          <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] text-forest-100 tabular-nums">
-            {activeVenues.length}
-          </span>
-        </button>
-        {admin && (
-          <button
-            aria-label="Reservations"
-            className={navItem(tab === 'bookings')}
-            onClick={showBookings}
-          >
-            <span className="text-base opacity-80">
-              <CalendarCheck
+            <span className="grid size-8 place-items-center rounded-lg bg-sprout-300 text-[17px] text-forest-950">
+              <Layers
                 className="size-5 inline-block shrink-0"
                 aria-hidden="true"
                 strokeWidth={1.75}
               />
             </span>{' '}
-            Reservations
+            openvenue
+            <span className="ml-0.5 rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-forest-200 max-lg:hidden">
+              BETA
+            </span>
+          </a>
+          <div className={sideLabel}>YOUR WORKSPACE</div>
+          {admin && (
+            <button
+              className={navItem(tab === 'overview')}
+              onClick={() => {
+                if (dirty && !confirm('Discard unsaved layout changes?')) return;
+                setEditing(false);
+                setDirty(false);
+                setTab('overview');
+              }}
+            >
+              Overview
+            </button>
+          )}
+          <button className={navItem(tab === 'map')} onClick={directory}>
+            <span className="text-base opacity-80">
+              <LayoutGrid
+                className="size-5 inline-block shrink-0"
+                aria-hidden="true"
+                strokeWidth={1.75}
+              />
+            </span>{' '}
+            Browse venues{' '}
+            <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] text-forest-100 tabular-nums">
+              {activeVenues.length}
+            </span>
           </button>
-        )}
-        <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
-        <div className={sideLabel}>YOUR VENUES</div>
-        {activeVenues.length > 6 && (
-          <input
-            type="search"
-            aria-label="Search venues"
-            placeholder="Search venues"
-            className="mb-3 min-h-9 text-sm text-ink"
-            value={venueSearch}
-            onChange={(event) => setVenueSearch(event.target.value)}
-          />
-        )}
-        <div className="venue-list -mx-1 min-h-0 overflow-auto px-1 max-sm:flex max-sm:gap-1.5 max-sm:overflow-x-auto">
-          {(['restaurant', 'parking', 'cinema', 'stadium'] as const).map((kind) => {
-            const matches = activeVenues.filter(
-              (v) =>
-                v.kind === kind &&
-                `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
-            );
-            if (!matches.length) return null;
-            return (
-              <div key={kind} className="max-sm:flex max-sm:gap-1.5">
-                <div className="px-3 pt-3 pb-1 text-[11px] font-semibold text-forest-300 max-sm:hidden">
-                  {
+          {admin && (
+            <button
+              aria-label="Reservations"
+              className={navItem(tab === 'bookings')}
+              onClick={showBookings}
+            >
+              <span className="text-base opacity-80">
+                <CalendarCheck
+                  className="size-5 inline-block shrink-0"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+              </span>{' '}
+              Reservations
+            </button>
+          )}
+          <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
+          <div className={sideLabel}>YOUR VENUES</div>
+          {activeVenues.length > 6 && (
+            <input
+              type="search"
+              aria-label="Search venues"
+              placeholder="Search venues"
+              className="mb-3 min-h-9 text-sm text-ink"
+              value={venueSearch}
+              onChange={(event) => setVenueSearch(event.target.value)}
+            />
+          )}
+          <div className="venue-list -mx-1 min-h-0 overflow-auto px-1 max-sm:flex max-sm:gap-1.5 max-sm:overflow-x-auto">
+            {(['restaurant', 'parking', 'cinema', 'stadium'] as const).map((kind) => {
+              const matches = activeVenues.filter(
+                (v) =>
+                  v.kind === kind &&
+                  `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
+              );
+              if (!matches.length) return null;
+              return (
+                <div key={kind} className="max-sm:flex max-sm:gap-1.5">
+                  <div className="px-3 pt-3 pb-1 text-[11px] font-semibold text-forest-300 max-sm:hidden">
                     {
-                      restaurant: 'Restaurants',
-                      parking: 'Parking',
-                      cinema: 'Cinemas',
-                      stadium: 'Stadiums',
-                    }[kind]
-                  }
+                      {
+                        restaurant: 'Restaurants',
+                        parking: 'Parking',
+                        cinema: 'Cinemas',
+                        stadium: 'Stadiums',
+                      }[kind]
+                    }
+                  </div>
+                  {matches.map((v) => (
+                    <button
+                      className={`venue-link mb-0.5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] leading-snug transition max-sm:w-auto max-sm:min-w-36 max-sm:shrink-0 ${
+                        venueId === v.id
+                          ? 'bg-white/10 text-white'
+                          : 'text-forest-100 hover:bg-white/5'
+                      }`}
+                      key={v.id}
+                      ref={venueId === v.id ? selectedVenueButton : undefined}
+                      onClick={() => chooseVenue(v.id)}
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-base text-sprout-300 ring-1 ring-white/10 max-sm:size-7">
+                        {types[v.kind].icon}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate" title={v.name}>
+                          {v.name}
+                        </span>
+                        <small className="mt-0.5 text-[11px] text-forest-300/80">
+                          {types[v.kind].name}
+                        </small>
+                      </span>
+                      {venueId === v.id && (
+                        <span className="size-1.5 shrink-0 rounded-full bg-sprout-300 max-sm:hidden" />
+                      )}
+                    </button>
+                  ))}
                 </div>
-                {matches.map((v) => (
-                  <button
-                    className={`venue-link mb-0.5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[13px] leading-snug transition max-sm:w-auto max-sm:min-w-36 max-sm:shrink-0 ${
-                      venueId === v.id
-                        ? 'bg-white/10 text-white'
-                        : 'text-forest-100 hover:bg-white/5'
-                    }`}
-                    key={v.id}
-                    ref={venueId === v.id ? selectedVenueButton : undefined}
-                    onClick={() => chooseVenue(v.id)}
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[0.06] text-base text-sprout-300 ring-1 ring-white/10 max-sm:size-7">
-                      {types[v.kind].icon}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate" title={v.name}>
+              );
+            })}
+            {activeVenues.length > 0 &&
+              !activeVenues.some((v) =>
+                `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
+              ) && (
+                <p role="status" className="px-3 py-2 text-xs text-forest-300">
+                  No matching venues.
+                </p>
+              )}
+          </div>
+          {admin && venues.some((v) => v.archivedAt) && (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer px-3 py-2 text-forest-300">Archived</summary>
+              <div className="max-h-48 overflow-auto">
+                {venues
+                  .filter((v) => v.archivedAt)
+                  .map((v) => (
+                    <div key={v.id} className="flex items-center gap-2 px-3 py-2">
+                      <span className="min-w-0 flex-1 truncate" title={v.name}>
                         {v.name}
                       </span>
-                      <small className="mt-0.5 text-[11px] text-forest-300/80">
-                        {types[v.kind].name}
-                      </small>
-                    </span>
-                    {venueId === v.id && (
-                      <span className="size-1.5 shrink-0 rounded-full bg-sprout-300 max-sm:hidden" />
-                    )}
-                  </button>
-                ))}
+                      <button
+                        className="shrink-0 underline"
+                        aria-label={`Restore ${v.name}`}
+                        onClick={() =>
+                          void run(async () => {
+                            const restored = await api<Venue>(
+                              `/venues/${v.id}`,
+                              json({ archived: false, revision: v.revision }, 'PATCH'),
+                            );
+                            setVenues((items) =>
+                              items.map((item) =>
+                                item.id === v.id ? { ...item, ...restored } : item,
+                              ),
+                            );
+                            setMessage(`${v.name} restored.`);
+                          })
+                        }
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
               </div>
-            );
-          })}
-          {activeVenues.length > 0 &&
-            !activeVenues.some((v) =>
-              `${v.name} ${v.kind}`.toLowerCase().includes(venueSearch.trim().toLowerCase()),
-            ) && (
-              <p role="status" className="px-3 py-2 text-xs text-forest-300">
-                No matching venues.
-              </p>
-            )}
-        </div>
-        {admin && venues.some((v) => v.archivedAt) && (
-          <details className="mt-3 text-xs">
-            <summary className="cursor-pointer px-3 py-2 text-forest-300">Archived</summary>
-            <div className="max-h-48 overflow-auto">
-              {venues
-                .filter((v) => v.archivedAt)
-                .map((v) => (
-                  <div key={v.id} className="flex items-center gap-2 px-3 py-2">
-                    <span className="min-w-0 flex-1 truncate" title={v.name}>
-                      {v.name}
-                    </span>
-                    <button
-                      className="shrink-0 underline"
-                      aria-label={`Restore ${v.name}`}
-                      onClick={() =>
-                        void run(async () => {
-                          const restored = await api<Venue>(
-                            `/venues/${v.id}`,
-                            json({ archived: false, revision: v.revision }, 'PATCH'),
-                          );
-                          setVenues((items) =>
-                            items.map((item) =>
-                              item.id === v.id ? { ...item, ...restored } : item,
-                            ),
-                          );
-                          setMessage(`${v.name} restored.`);
-                        })
-                      }
-                    >
-                      Restore
-                    </button>
-                  </div>
-                ))}
+            </details>
+          )}
+          {admin && (
+            <button
+              className="add-venue mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-forest-300 transition hover:bg-white/5 hover:text-white"
+              aria-label="New venue"
+              onClick={() => openCreate()}
+            >
+              + New venue
+            </button>
+          )}
+          <div className="mt-auto pt-6 max-sm:hidden">
+            <div className="mb-3 flex gap-3 rounded-xl bg-white/[0.04] p-3 text-xs text-forest-100 ring-1 ring-white/5">
+              <span className="text-lg leading-none text-sprout-300">
+                <ArrowUpRight
+                  className="size-4 inline-block shrink-0"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+              </span>
+              <div>
+                Made to be yours
+                <small className="mt-0.5 text-[11px] text-forest-300/70">
+                  Open source. Open possibilities.
+                </small>
+              </div>
             </div>
-          </details>
-        )}
-        {admin && (
-          <button
-            className="add-venue mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-forest-300 transition hover:bg-white/5 hover:text-white"
-            aria-label="New venue"
-            onClick={() => openCreate()}
-          >
-            + New venue
-          </button>
-        )}
-        <div className="mt-auto pt-6 max-sm:hidden">
-          <div className="mb-3 flex gap-3 rounded-xl bg-white/[0.04] p-3 text-xs text-forest-100 ring-1 ring-white/5">
-            <span className="text-lg leading-none text-sprout-300">
-              <ArrowUpRight
-                className="size-4 inline-block shrink-0"
-                aria-hidden="true"
-                strokeWidth={1.75}
-              />
-            </span>
-            <div>
-              Made to be yours
-              <small className="mt-0.5 text-[11px] text-forest-300/70">
-                Open source. Open possibilities.
-              </small>
-            </div>
+            <button
+              className="profile flex w-full items-center gap-3 rounded-xl p-2 text-left text-[13px] text-white transition hover:bg-white/5"
+              onClick={() =>
+                admin
+                  ? run(async () => {
+                      if (dirty && !confirm('Discard unsaved changes and sign out?')) return;
+                      await api('/auth/logout', json({}));
+                      setAdmin(false);
+                      setEditing(false);
+                      setDirty(false);
+                      setTab('map');
+                      setStep('venues');
+                    })
+                  : openLogin()
+              }
+            >
+              <span className="avatar grid size-9 shrink-0 place-items-center rounded-full bg-sprout-300/15 text-xs font-semibold text-sprout-300 ring-1 ring-sprout-300/25">
+                {admin ? 'AD' : 'G'}
+              </span>
+              <span className="min-w-0 flex-1">
+                {admin ? 'Administrator' : 'Guest booking'}
+                <small className="mt-0.5 text-[11px] text-forest-300">
+                  {admin ? 'Sign out' : 'Admin sign in'}
+                </small>
+              </span>
+              <span className="text-forest-300">
+                <ArrowUpRight
+                  className="size-4 inline-block shrink-0"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
+              </span>
+            </button>
           </div>
-          <button
-            className="profile flex w-full items-center gap-3 rounded-xl p-2 text-left text-[13px] text-white transition hover:bg-white/5"
-            onClick={() =>
-              admin
-                ? run(async () => {
-                    if (dirty && !confirm('Discard unsaved changes and sign out?')) return;
-                    await api('/auth/logout', json({}));
-                    setAdmin(false);
-                    setEditing(false);
-                    setDirty(false);
-                    setTab('map');
-                    setStep('venues');
-                  })
-                : openLogin()
-            }
-          >
-            <span className="avatar grid size-9 shrink-0 place-items-center rounded-full bg-sprout-300/15 text-xs font-semibold text-sprout-300 ring-1 ring-sprout-300/25">
-              {admin ? 'AD' : 'G'}
-            </span>
-            <span className="min-w-0 flex-1">
-              {admin ? 'Administrator' : 'Guest booking'}
-              <small className="mt-0.5 text-[11px] text-forest-300">
-                {admin ? 'Sign out' : 'Admin sign in'}
-              </small>
-            </span>
-            <span className="text-forest-300">
-              <ArrowUpRight
-                className="size-4 inline-block shrink-0"
-                aria-hidden="true"
-                strokeWidth={1.75}
-              />
-            </span>
-          </button>
-        </div>
-      </aside>
+        </aside>
+      )}
       <main className="main min-w-0 flex-1">
-        <header className="topbar flex h-14 items-center justify-between border-b border-stone-200/70 px-8 text-[13px] text-stone-500 max-lg:px-6 max-sm:h-12 max-sm:px-4">
-          <div>
-            Workspace <span className="mx-2 text-stone-300">/</span>{' '}
-            <span className="font-medium text-ink">
-              {tab === 'overview'
-                ? 'Overview'
-                : tab === 'bookings'
-                  ? 'Reservations'
-                  : admin
-                    ? 'Venue management'
-                    : 'Book a place'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2.5 max-md:hidden">
-            <span className="live-dot" /> Self-hosted workspace{' '}
-            <span className="rounded-md border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] text-stone-500">
-              v0.1
-            </span>
-          </div>
-        </header>
+        {!publicBooking && (
+          <header className="topbar flex h-14 items-center justify-between border-b border-stone-200/70 px-8 text-[13px] text-stone-500 max-lg:px-6 max-sm:h-12 max-sm:px-4">
+            <div>
+              Workspace <span className="mx-2 text-stone-300">/</span>{' '}
+              <span className="font-medium text-ink">
+                {tab === 'overview'
+                  ? 'Overview'
+                  : tab === 'bookings'
+                    ? 'Reservations'
+                    : admin
+                      ? 'Venue management'
+                      : 'Book a place'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 max-md:hidden">
+              <span className="live-dot" /> Self-hosted workspace{' '}
+              <span className="rounded-md border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] text-stone-500">
+                v0.1
+              </span>
+            </div>
+          </header>
+        )}
         <div
           className={`content mx-auto max-w-[1600px] px-8 max-lg:px-6 max-sm:px-4 ${admin && step !== 'venues' ? 'py-3' : 'py-8 max-sm:py-6'}`}
         >
+          {publicBooking && !publicBooking.embed && venue && (
+            <header className="booking-hero mb-6 rounded-2xl bg-forest-50 p-6 ring-1 ring-forest-100">
+              <p className="eyebrow">Reserve your visit</p>
+              <h1 className="mt-2">{venue.name}</h1>
+              <p className="mt-2 text-sm text-stone-600">
+                Choose your time and place. Keep your confirmation for arrival.
+              </p>
+            </header>
+          )}
           {step === 'venues' && tab === 'map' && (
             <div className="page-heading mb-7 flex items-end justify-between gap-5 max-sm:flex-col max-sm:items-start">
               <div>
@@ -991,27 +1050,8 @@ export default function App() {
           >
             {message}
           </div>
-          {tab === 'map' && !admin && step !== 'done' && (
-            <nav
-              className="booking-steps mb-6 flex flex-wrap items-center gap-2"
-              aria-label="Booking progress"
-            >
-              {stepOrder.map((item, i) => (
-                <span
-                  key={item}
-                  aria-current={step === item ? 'step' : undefined}
-                  className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition max-sm:px-2.5 max-sm:text-xs ${
-                    step === item
-                      ? 'bg-forest-800 text-white shadow-sm'
-                      : i < stepIndex
-                        ? 'bg-forest-50 text-forest-700 ring-1 ring-forest-100'
-                        : 'bg-white text-stone-500 ring-1 ring-stone-200'
-                  }`}
-                >
-                  {i + 1}. {['Venue', 'Time', 'Place', 'Review'][i]}
-                </span>
-              ))}
-            </nav>
+          {!admin && tab === 'map' && (publicBooking || step !== 'done') && (
+            <BookingProgress step={step} publicPage={!!publicBooking} />
           )}
           {tab === 'overview' && admin ? (
             <Overview
@@ -1086,75 +1126,14 @@ export default function App() {
               {!loaded && <p className="empty">Loading venues…</p>}
             </section>
           ) : step === 'done' && confirmation ? (
-            <section
-              className="panel journey-panel mx-auto max-w-[640px] p-8 max-sm:p-6"
-              aria-label="Booking confirmation"
-            >
-              <div
-                className="confirmation-mark grid size-12 place-items-center rounded-full bg-forest-100 text-2xl text-forest-700 ring-8 ring-forest-50"
-                aria-hidden="true"
-              >
-                <Check
-                  className="size-4 inline-block shrink-0"
-                  aria-hidden="true"
-                  strokeWidth={1.75}
-                />
-              </div>
-              <h2 className="mt-6 mb-1 text-[26px]">Reservation confirmed</h2>
-              <p className="text-stone-500">Save these details for your arrival.</p>
-              <dl className="booking-summary my-6 grid grid-cols-[100px_minmax(0,1fr)] gap-x-4 gap-y-3 rounded-xl bg-stone-50 p-5 text-[13px] ring-1 ring-stone-100 [&_dd]:m-0 [&_dd]:font-medium [&_dd]:wrap-anywhere [&_dt]:text-stone-500">
-                <dt>Venue</dt>
-                <dd>{venue?.name}</dd>
-                <dt>Place</dt>
-                <dd>
-                  {confirmed
-                    .map(
-                      (b) =>
-                        b.seatLocation ??
-                        (() => {
-                          const seat = venue?.layout.floors
-                            .flatMap((f) => f.resources)
-                            .find((r) => r.id === b.resourceId);
-                          return seat ? seatLocation(seat) : 'Seat';
-                        })(),
-                    )
-                    .join(', ')}
-                </dd>
-                <dt>{seatVenue ? 'Seats' : 'Guests'}</dt>
-                <dd>{seatVenue ? confirmed.length : confirmation.partySize}</dd>
-                <dt>Total</dt>
-                <dd className="tabular-nums">
-                  {formatPrice(
-                    confirmed.reduce((sum, b) => sum + b.price, 0),
-                    confirmation.currency,
-                  )}{' '}
-                  · Not paid
-                </dd>
-                <dt>Guest</dt>
-                <dd>{confirmation.guestName}</dd>
-                <dt>From</dt>
-                <dd>{new Date(confirmation.start).toLocaleString()}</dd>
-                <dt>Until</dt>
-                <dd>{new Date(confirmation.end).toLocaleString()}</dd>
-                <dt>Reference</dt>
-                <dd className="booking-reference">
-                  {confirmed.map((b) => (
-                    <div key={b.id}>{b.id}</div>
-                  ))}
-                </dd>
-              </dl>
-              <p className="muted">
-                To change or cancel your reservation, contact the venue and quote this reference.
-              </p>
-              <button className="primary" onClick={directory}>
-                Book another visit
-              </button>
-            </section>
+            <BookingConfirmation confirmation={confirmation} venue={venue} onAgain={directory} />
           ) : !admin && step === 'time' && venue ? (
             <section className="panel journey-panel mx-auto max-w-[640px] p-8 max-sm:p-6 [&_label]:my-5">
-              <button className="text-button -ml-2" onClick={directory}>
-                ← All venues
-              </button>
+              {!publicBooking && (
+                <button className="text-button -ml-2" onClick={directory}>
+                  ← All venues
+                </button>
+              )}
               <div className="eyebrow mt-4">{types[venue.kind].name}</div>
               <h2 className="mt-2 mb-2 text-[26px]">{venue.name}</h2>
               <p className="leading-relaxed text-stone-600">
@@ -1188,7 +1167,9 @@ export default function App() {
             <div className="empty">
               {loaded
                 ? 'No venues found. Sign in to create your first venue.'
-                : 'Opening your workspace…'}
+                : publicBooking
+                  ? 'Loading booking…'
+                  : 'Opening your workspace…'}
             </div>
           ) : admin && seatVenue && venueTab === 'events' && !editing ? (
             <section className="panel venue-panel">
@@ -1262,6 +1243,8 @@ export default function App() {
                           items={[
                             { label: 'Duplicate', onSelect: () => openCreate(current) },
                             { label: 'Generate with Claude', onSelect: () => setModal('generate') },
+                            { label: 'Share booking link', onSelect: () => shareBooking(false) },
+                            { label: 'Embed', onSelect: () => shareBooking(true) },
                             {
                               label: 'Venue settings',
                               onSelect: () => {
@@ -1790,7 +1773,7 @@ export default function App() {
               </div>
             </section>
           )}
-          {!admin && (
+          {!admin && !publicBooking?.embed && (
             <footer className="page-footer mt-6 flex justify-between gap-3 text-xs text-stone-400">
               <span>Thoughtfully mapped. Effortlessly reserved.</span>
               <span className="max-sm:hidden">OpenVenue · Built for shared spaces</span>
@@ -1798,6 +1781,7 @@ export default function App() {
           )}
         </div>
       </main>
+      {embedUrl && <BookingEmbed url={embedUrl} onClose={() => setEmbedUrl('')} />}
       {modal === 'settings' && current && (
         <VenueSettings
           venue={current}

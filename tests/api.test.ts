@@ -122,6 +122,22 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
       (await (await request('/venues')).json()).find((item: any) => item.id === v.id).name,
     ).toBe('Renamed venue');
   });
+  it('allows framing only public booking pages and publishes only the configured sharing origin', async () => {
+    const page = await fetch(base + '/book/' + venue.id);
+    expect(page.headers.get('x-frame-options')).toBeNull();
+    expect(page.headers.get('content-security-policy')).toContain(
+      "frame-ancestors 'self' http: https:",
+    );
+    for (const path of ['/', '/api/venues', '/bookkeeping']) {
+      const response = await fetch(base + path);
+      expect(response.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+      expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+      expect(response.headers.get('content-security-policy')).not.toContain('http: https:');
+    }
+    expect(await (await request('/public-config')).json()).toEqual({
+      publicOrigin: 'https://venue.example',
+    });
+  });
   it('protects admin data and rejects cross-origin mutations', async () => {
     expect((await request('/bookings')).status).toBe(401);
     expect((await request('/venues', { kind: 'parking', name: 'Unauthorized' })).status).toBe(401);
