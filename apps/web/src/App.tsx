@@ -16,6 +16,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { Reservations } from './Reservations';
 import { Events } from './Events';
 import { Overview } from './Overview';
 import { EventSeatControls } from './EventSeatControls';
@@ -144,12 +145,9 @@ export default function App() {
   }, [venueId, editing, admin]);
   const [busy, setBusy] = useState<string[]>([]),
     [availabilityReady, setAvailabilityReady] = useState(false),
-    [guest, setGuest] = useState(''),
-    [bookings, setBookings] = useState<Booking[]>([]);
-  const [attendeeSearch, setAttendeeSearch] = useState('');
-  const filteredBookings = bookings.filter((booking) =>
-    booking.guestName.toLowerCase().includes(attendeeSearch.trim().toLowerCase()),
-  );
+    [guest, setGuest] = useState('');
+  const [guestEmail, setGuestEmail] = useState(''),
+    [guestPhone, setGuestPhone] = useState('');
   const [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [working, setWorking] = useState(false),
@@ -461,6 +459,8 @@ export default function App() {
           expectedTotal: total,
           expectedCurrency: currency,
           guestName: guest,
+          guestEmail: guestEmail.trim() || undefined,
+          guestPhone: guestPhone.trim() || undefined,
           ...interval,
           ...(seatVenue ? { showId } : {}),
         }),
@@ -474,15 +474,16 @@ export default function App() {
       setStep('done');
       setRefresh((v) => v + 1);
       setGuest('');
+      setGuestEmail('');
+      setGuestPhone('');
       setMessage(
         `Reservation confirmed for ${bookingResources.map((r) => seatLocation(r)).join(', ')}.`,
       );
     });
-  const showBookings = () =>
-    run(async () => {
-      setBookings(await api<Booking[]>('/bookings'));
-      setTab('bookings');
-    });
+  const showBookings = () => {
+    setTab('bookings');
+    setMessage('');
+  };
   const exportLayout = () => {
     if (!current) return;
     const url = URL.createObjectURL(
@@ -658,9 +659,6 @@ export default function App() {
     }`;
   const sideLabel =
     'mb-2 px-3 text-[10px] font-semibold tracking-[0.16em] text-forest-300/70 max-sm:hidden';
-  const th =
-    'bg-stone-50/80 px-6 py-2.5 text-[11px] font-semibold tracking-wider text-stone-500 uppercase';
-  const td = 'border-t border-stone-100 px-6 py-3.5 align-top';
   const inspectorWidth = isReview
     ? 'mx-auto w-auto max-w-[560px] p-8 max-sm:p-5'
     : editing
@@ -872,7 +870,6 @@ export default function App() {
                     setDirty(false);
                     setTab('map');
                     setStep('venues');
-                    setBookings([]);
                   })
                 : openLogin()
             }
@@ -999,96 +996,7 @@ export default function App() {
               }}
             />
           ) : tab === 'bookings' ? (
-            <section className="panel booking-list pb-2">
-              <div className="flex flex-wrap items-end justify-between gap-4 px-6 pt-6 pb-5 max-sm:px-4">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h2>Reservations</h2>
-                    <span className="pill">{filteredBookings.length} active</span>
-                  </div>
-                  <p className="mt-1.5 text-[13px] text-stone-500">
-                    Upcoming and past confirmed reservations · Showing up to 500
-                  </p>
-                </div>
-                <label className="attendee-search mb-0 w-full max-w-xs">
-                  Search attendees
-                  <input
-                    type="search"
-                    value={attendeeSearch}
-                    onChange={(event) => setAttendeeSearch(event.target.value)}
-                    placeholder="Search by guest name"
-                  />
-                </label>
-              </div>
-              {bookings.length === 0 ? (
-                <div className="empty border-t border-stone-100">
-                  No reservations yet. Your next guest starts on the map.
-                </div>
-              ) : filteredBookings.length === 0 ? (
-                <div className="empty border-t border-stone-100" role="status">
-                  No reservations match this attendee.
-                </div>
-              ) : (
-                <div className="table-scroll overflow-auto border-t border-stone-100">
-                  <table className="w-full border-collapse text-left text-[13px]">
-                    <thead>
-                      <tr>
-                        <th className={th}>Guest</th>
-                        <th className={th}>Venue / resource</th>
-                        <th className={th}>Party / price</th>
-                        <th className={th}>When</th>
-                        <th className={th} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredBookings.map((b) => (
-                        <tr key={b.id} className="transition hover:bg-stone-50/70">
-                          <td className={`${td} font-medium text-ink`}>
-                            {b.guestName}
-                            <small className="booking-reference mt-0.5 font-normal">{b.id}</small>
-                          </td>
-                          <td className={td}>
-                            {b.venueName}
-                            <small className="mt-0.5 text-xs text-stone-500">
-                              {b.seatLocation ?? b.resourceLabel}
-                            </small>
-                          </td>
-                          <td className={td}>
-                            {b.partySize} {b.partySize === 1 ? 'guest' : 'guests'}
-                            <small className="mt-0.5 text-xs text-stone-500 tabular-nums">
-                              {formatPrice(b.price, b.currency)} · Not paid
-                            </small>
-                          </td>
-                          <td className={`${td} tabular-nums`}>
-                            {new Date(b.start).toLocaleString()}
-                            <small className="mt-0.5 text-xs text-stone-500">
-                              to {new Date(b.end).toLocaleString()}
-                            </small>
-                          </td>
-                          <td className={`${td} text-right`}>
-                            <button
-                              className="text-button danger"
-                              aria-label="Cancel reservation"
-                              disabled={working}
-                              onClick={() =>
-                                run(async () => {
-                                  await api(`/bookings/${b.id}`, { method: 'DELETE' });
-                                  setBookings((v) => v.filter((x) => x.id !== b.id));
-                                  setRefresh((v) => v + 1);
-                                  setMessage('Reservation cancelled.');
-                                })
-                              }
-                            >
-                              Cancel
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            <Reservations onMessage={setMessage} onChange={() => setRefresh((n) => n + 1)} />
           ) : step === 'venues' ? (
             <section aria-label="Venue directory">
               <div
@@ -1754,6 +1662,26 @@ export default function App() {
                                 required
                                 onChange={(e) => setGuest(e.target.value)}
                                 placeholder="Who are we expecting?"
+                              />
+                            </label>
+                            <label>
+                              Email (optional)
+                              <input
+                                type="email"
+                                autoComplete="email"
+                                maxLength={254}
+                                value={guestEmail}
+                                onChange={(e) => setGuestEmail(e.target.value)}
+                              />
+                            </label>
+                            <label>
+                              Phone (optional)
+                              <input
+                                type="tel"
+                                autoComplete="tel"
+                                maxLength={40}
+                                value={guestPhone}
+                                onChange={(e) => setGuestPhone(e.target.value)}
                               />
                             </label>
                             <button className="primary full h-10" disabled={working || !canReserve}>

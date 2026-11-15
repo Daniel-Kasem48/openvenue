@@ -57,6 +57,34 @@ In **Edit layout → Reservation pricing**, choose free, one standard price, or 
 
 Restaurant guests choose party size and a table with enough capacity. Cinema/stadium guests choose a seat count and toggle that many seats. If any seat conflicts, the entire checkout rolls back. Each seat can subsequently be cancelled individually by the administrator.
 
+## Reservation operations
+
+Guests may supply an optional email address and phone number with their reservation. Contact
+fields and staff notes are private: only authenticated operator views and exports contain them;
+public confirmations and availability responses exclude them. No messages are sent automatically.
+
+Reservations supports venue, event, date range, status and name/email/reference filters. Search
+matches literal text, including `%` and `_`. Date filters include reservations overlapping the
+selected days in the browser's timezone. Choose a venue to filter by its event. Archived venue
+history remains searchable. Use **Load more reservations** to continue through the results.
+
+Click a guest name or row for the details drawer. Operators can save staff notes, check in or undo
+an arrival, mark a no-show, and cancel. No-show and cancelled reservations release availability
+and clear check-in; they cannot be checked in or restored to confirmed. Notes remain editable.
+The status filter can show cancelled/no-show history, including bookings from deleted events.
+
+**Export CSV** downloads every row matching the filters, including private contact details and
+notes, regardless of the loaded page. The file uses a UTF-8 BOM, quoted fields and UTC dates;
+prices are labelled as integer minor units with separate currencies. Potential spreadsheet
+formulas are prefixed with an apostrophe. Quotes, commas and multiline notes are preserved.
+
+`GET /api/bookings` returns `{ items, nextCursor }`, ordered by start time and reference. Accepted
+filters are `venueId`, `showId`, `from`, `to`, `status` (`confirmed` by default, or `cancelled`,
+`no_show`, `all`), and `q`; `limit` is 1–100 (default 50). Pass the returned opaque `cursor` for
+the next page. `GET /api/bookings.csv` uses the same filters and ignores pagination. Guarded
+`PATCH /api/bookings/:id` accepts `notes` (up to 4,000 characters), `checkedIn` (boolean), or
+`status` (`cancelled`/`no_show`). Booking creation accepts optional `guestEmail` and `guestPhone`.
+
 ## Event management
 
 Cinema and stadium venue panels have **Map** and **Events** tabs. Events lists upcoming and
@@ -200,7 +228,7 @@ proxy handling before high-volume use behind a proxy.
 - Cinema showtimes apply to the venue; no multi-auditorium scheduling in this MVP.
 - No recurring reservations, customer accounts, calendar integrations or CAD imports.
 - Up to 10 floors and 1,000 resources per floor. Large scenes are not load-tested.
-- Admin list shows up to 500 confirmed reservations, including past ones.
+- Reservations use cursor pagination (50 rows per page, API maximum 100); CSV exports all rows matching the filters.
 - Initial schema is idempotent; future releases need explicit versioned migrations.
 
 MIT licensed. Contributions welcome; run the checks above before submitting a PR.

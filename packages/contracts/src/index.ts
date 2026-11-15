@@ -135,7 +135,7 @@ export type Booking = {
   guestName: string;
   start: string;
   end: string;
-  status: 'confirmed' | 'cancelled';
+  status: 'confirmed' | 'cancelled' | 'no_show';
   partySize: number;
   price: number;
   currency: z.infer<typeof currencySchema>;
@@ -187,6 +187,12 @@ export const bookingSchema = z.object({
   expectedTotal: z.number().int().min(0).max(2000000000).optional(),
   expectedCurrency: currencySchema.optional(),
   guestName: name,
+  guestEmail: z.email().max(254).optional(),
+  guestPhone: z
+    .string()
+    .trim()
+    .regex(/^[+\d() .-]{3,40}$/, 'Enter a valid phone number')
+    .optional(),
   start: z.iso.datetime({ offset: true }).optional(),
   end: z.iso.datetime({ offset: true }).optional(),
   showId: uuid.optional(),
@@ -314,3 +320,56 @@ export const overviewSchema = z.object({
   ),
 });
 export type OverviewData = z.infer<typeof overviewSchema>;
+
+export type AdminBooking = Booking & {
+  showId: string | null;
+  guestEmail: string | null;
+  guestPhone: string | null;
+  notes: string;
+  checkedInAt: string | null;
+  createdAt: string;
+};
+export type BookingPage = { items: AdminBooking[]; nextCursor: string | null };
+export const bookingFiltersSchema = z
+  .object({
+    venueId: z.uuid().optional(),
+    showId: z.uuid().optional(),
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+    status: z.enum(['confirmed', 'cancelled', 'no_show', 'all']).default('confirmed'),
+    q: z
+      .string()
+      .trim()
+      .max(100)
+      .refine((text) => !text.includes('\0'), 'Invalid search text')
+      .default(''),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z
+      .string()
+      .max(256)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .optional(),
+  })
+  .refine(
+    ({ from, to }) => !from || !to || Date.parse(to) > Date.parse(from),
+    'Choose a positive date range',
+  );
+export const bookingCursorSchema = z
+  .object({ start: z.iso.datetime({ offset: true }), id: z.uuid() })
+  .strict();
+export const bookingPatchSchema = z
+  .object({
+    notes: z
+      .string()
+      .max(4000)
+      .refine((text) => !text.includes('\0'), 'Notes cannot contain null characters')
+      .optional(),
+    checkedIn: z.boolean().optional(),
+    status: z.enum(['cancelled', 'no_show']).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Choose a change')
+  .refine(
+    (value) => !(value.status && value.checkedIn === true),
+    'Terminal reservations cannot be checked in',
+  );

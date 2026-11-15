@@ -106,7 +106,7 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
       ).status,
     ).toBe(409);
     expect(
-      (await (await request('/bookings', undefined, true)).json()).some(
+      (await (await request(`/bookings?venueId=${v.id}`, undefined, true)).json()).items.some(
         (item: any) => item.id === booking.id,
       ),
     ).toBe(true);
@@ -311,8 +311,8 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     const response = await request('/bookings', { ...body, partySize: r.capacity });
     expect(response.status).toBe(201);
     expect((await response.json()).partySize).toBe(r.capacity);
-    const rows = await (await request('/bookings', undefined, true)).json();
-    expect(rows.find((b: any) => b.venueId === v.id).partySize).toBe(r.capacity);
+    const rows = await (await request(`/bookings?venueId=${v.id}`, undefined, true)).json();
+    expect(rows.items.find((b: any) => b.venueId === v.id).partySize).toBe(r.capacity);
   });
   it('reserves cinema seats atomically and rejects duplicate or mismatched selections', async () => {
     const v = await (

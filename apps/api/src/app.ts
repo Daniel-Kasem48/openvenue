@@ -16,6 +16,8 @@ import {
   reservationPrice,
   bookingSchema,
   eventSchema,
+  bookingFiltersSchema,
+  bookingPatchSchema,
   cloneLayout,
   createVenueSchema,
   intervalSchema,
@@ -23,6 +25,7 @@ import {
   saveVenueSchema,
   patchVenueSchema,
 } from '@openvenue/contracts';
+import { adminBookingSelect, bookingColumns, bookingsCsv, queryBookings } from './reservations';
 import { overview } from './overview';
 import { initialize, syncResources, transaction } from './database';
 import { authentication, tokenHash } from './auth';
@@ -33,7 +36,7 @@ Module({})(RootModule);
 const fail = (status: number, message: string): never => {
   throw Object.assign(new Error(message), { status });
 };
-const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "resourceId", b.guest_name AS "guestName", b.starts_at AS start, b.ends_at AS end, b.status, b.party_size AS "partySize", b.price, b.currency, b.seat_location AS "seatLocation", b.event_title AS "eventTitle"`;
+
 export async function createApp(config: {
   databaseUrl: string;
   adminPassword: string;
@@ -359,7 +362,7 @@ export async function createApp(config: {
           );
         if (cancel)
           await client.query(
-            "UPDATE bookings SET status='cancelled' WHERE show_id=$1 AND status='confirmed'",
+            "UPDATE bookings SET status='cancelled',checked_in_at=NULL WHERE show_id=$1 AND status='confirmed'",
             [showId],
           );
         // Keep reservation history and its title after removing the event foreign key.
@@ -547,7 +550,7 @@ export async function createApp(config: {
           bookings.push(
             (
               await client.query(
-                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency,seat_location,event_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING ${bookingColumns}`,
+                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency,seat_location,event_title,guest_email,guest_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING ${bookingColumns}`,
                 [
                   randomUUID(),
                   body.venueId,
@@ -564,6 +567,8 @@ export async function createApp(config: {
                   layout.pricing.currency,
                   seatLocation(resources.find((r) => r.id === id)!),
                   eventTitle,
+                  body.guestEmail ?? null,
+                  body.guestPhone ?? null,
                 ],
               )
             ).rows[0],
@@ -578,21 +583,43 @@ export async function createApp(config: {
     const { from, to } = overviewRangeSchema.parse(req.query);
     res.json(await overview(pool, from, to));
   });
-  router.get('/bookings', guard, async (_req, res) => {
-    res.json(
-      (
-        await pool.query(
-          `SELECT ${bookingColumns}, v.name AS "venueName",r.label AS "resourceLabel" FROM bookings b JOIN venues v ON v.id=b.venue_id JOIN resources r ON r.id=b.resource_id WHERE b.status='confirmed' ORDER BY b.starts_at LIMIT 500`,
-        )
-      ).rows,
-    );
+  router.get('/bookings', guard, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await queryBookings(pool, bookingFiltersSchema.parse(req.query), true));
+  });
+  router.get('/bookings.csv', guard, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const rows = await queryBookings(pool, bookingFiltersSchema.parse(req.query), false);
+    res.setHeader('Content-Disposition', 'attachment; filename="reservations.csv"');
+    res.type('text/csv; charset=utf-8').send(bookingsCsv(rows.items));
+  });
+  async function patchBooking(id: string, body: z.infer<typeof bookingPatchSchema>) {
+    return transaction(pool, async (client) => {
+      const found = (await client.query('SELECT venue_id FROM bookings WHERE id=$1', [id])).rows[0];
+      if (!found) fail(404, 'Reservation not found');
+      await client.query('SELECT id FROM venues WHERE id=$1 FOR UPDATE', [found.venue_id]);
+      const booking = (
+        await client.query('SELECT status FROM bookings WHERE id=$1 FOR UPDATE', [id])
+      ).rows[0];
+      if (body.checkedIn === true && booking.status !== 'confirmed')
+        fail(409, 'Only confirmed reservations can be checked in');
+      if (body.status && booking.status !== 'confirmed' && body.status !== booking.status)
+        fail(409, 'This reservation already has a terminal status');
+      await client.query(
+        `UPDATE bookings SET notes=coalesce($2,notes),status=coalesce($3,status),
+        checked_in_at=CASE WHEN coalesce($3,status)<>'confirmed' THEN NULL
+          WHEN $4::boolean IS NULL THEN checked_in_at WHEN $4 THEN coalesce(checked_in_at,now()) ELSE NULL END
+        WHERE id=$1`,
+        [id, body.notes ?? null, body.status ?? null, body.checkedIn ?? null],
+      );
+      return (await client.query(adminBookingSelect + ' WHERE b.id=$1', [id])).rows[0];
+    });
+  }
+  router.patch('/bookings/:id', guard, async (req, res) => {
+    res.json(await patchBooking(z.uuid().parse(req.params.id), bookingPatchSchema.parse(req.body)));
   });
   router.delete('/bookings/:id', guard, async (req, res) => {
-    const result = await pool.query(
-      "UPDATE bookings SET status='cancelled' WHERE id=$1 RETURNING id",
-      [req.params.id],
-    );
-    if (!result.rowCount) fail(404, 'Reservation not found');
+    await patchBooking(z.uuid().parse(req.params.id), { status: 'cancelled' });
     res.json({ cancelled: true });
   });
   app.use('/api', router);

@@ -40,6 +40,9 @@ test('operator creates a template, edits a map and manages a reservation', async
   await page.getByRole('button', { name: 'Confirm reservation' }).click();
   await expect(page.getByRole('status')).toContainText('Reservation confirmed');
   await page.getByRole('button', { name: 'Reservations', exact: true }).click();
+  await page
+    .getByRole('combobox', { name: 'Venue', exact: true })
+    .selectOption({ label: venueName });
   await expect(
     page.getByRole('row').filter({ hasText: venueName }).getByText('Browser Guest'),
   ).toBeVisible();
