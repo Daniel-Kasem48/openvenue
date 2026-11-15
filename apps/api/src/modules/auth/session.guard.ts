@@ -11,7 +11,7 @@ import { Reflector } from '@nestjs/core';
 import type { Role } from '@openvenue/contracts';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { fail } from '../common/errors';
+import { fail } from '../../common/errors';
 import { AuthService } from './auth.service';
 import type { Principal } from './credentials';
 export interface AuthenticatedRequest extends Request {

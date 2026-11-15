@@ -1,5 +1,5 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common';
-import { APP_CONFIG, type AppConfig } from '../config';
+import { APP_CONFIG, type AppConfig } from '../../config';
 import { DatabaseService } from './database.service';
 @Global()
 @Module({})

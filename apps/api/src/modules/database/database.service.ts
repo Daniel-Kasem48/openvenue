@@ -1,6 +1,6 @@
 import { Inject, Injectable, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { MikroORM, type EntityManager } from '@mikro-orm/postgresql';
-import { APP_CONFIG, type AppConfig } from '../config';
+import { APP_CONFIG, type AppConfig } from '../../config';
 import { entities } from './entities';
 import { initialize } from './queries';
 

@@ -46,7 +46,7 @@ export async function initialize(em: EntityManager) {
   ];
   const scripts = await Promise.all(
     migrations.map((name) =>
-      readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), 'utf8'),
+      readFile(new URL(`../../../migrations/${name}.sql`, import.meta.url), 'utf8'),
     ),
   );
   await em.transactional(async (em) => {

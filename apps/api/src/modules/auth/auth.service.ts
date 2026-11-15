@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { fail } from '../common/errors';
-import { APP_CONFIG, type AppConfig } from '../config';
+import { fail } from '../../common/errors';
+import { APP_CONFIG, type AppConfig } from '../../config';
 import { DatabaseService } from '../database/database.service';
 import { Session, User } from '../database/entities';
 import { hashPassword, tokenHash, verifyPassword, type Principal } from './credentials';

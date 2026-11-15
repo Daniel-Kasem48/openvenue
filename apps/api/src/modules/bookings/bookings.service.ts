@@ -12,8 +12,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Principal } from '../auth/credentials';
-import { audit } from '../common/audit';
-import { fail } from '../common/errors';
+import { audit } from '../../common/audit';
+import { fail } from '../../common/errors';
 import { DatabaseService } from '../database/database.service';
 import { Booking, EventSeatBlock, Show, Venue } from '../database/entities';
 import { applyBookingUpdate, priceSelection, selectPlaces } from './booking-policy';

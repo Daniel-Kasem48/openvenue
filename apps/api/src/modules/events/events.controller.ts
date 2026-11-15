@@ -11,7 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { Roles, type AuthenticatedRequest } from '../auth/session.guard';
-import { UuidPipe } from '../common/uuid.pipe';
+import { UuidPipe } from '../../common/uuid.pipe';
 import { EventsService } from './events.service';
 
 @Controller('venues/:id')

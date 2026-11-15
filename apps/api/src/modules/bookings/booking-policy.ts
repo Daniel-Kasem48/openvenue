@@ -8,7 +8,7 @@ import {
 } from '@openvenue/contracts';
 import type { z } from 'zod';
 import type { Booking, Show, Venue } from '../database/entities';
-import { fail } from '../common/errors';
+import { fail } from '../../common/errors';
 
 export type BookingRequest = z.infer<typeof bookingSchema>;
 

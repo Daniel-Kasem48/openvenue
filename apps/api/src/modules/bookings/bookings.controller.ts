@@ -15,9 +15,9 @@ import {
 import { bookingPatchSchema } from '@openvenue/contracts';
 import type { Response } from 'express';
 import { Roles, type AuthenticatedRequest } from '../auth/session.guard';
-import { fail } from '../common/errors';
-import { BookingRateLimitGuard } from '../common/rate-limit.guard';
-import { UuidPipe } from '../common/uuid.pipe';
+import { fail } from '../../common/errors';
+import { BookingRateLimitGuard } from '../../common/rate-limit.guard';
+import { UuidPipe } from '../../common/uuid.pipe';
 import { BookingsService } from './bookings.service';
 
 @Controller('')

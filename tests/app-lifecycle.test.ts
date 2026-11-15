@@ -3,11 +3,11 @@ import type { INestApplication } from '@nestjs/common';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import { makeTemplate } from '@openvenue/contracts';
-import { Booking, Venue } from '../apps/api/src/database/entities';
-import { BookingsRepository } from '../apps/api/src/bookings/bookings.repository';
+import { Booking, Venue } from '../apps/api/src/modules/database/entities';
+import { BookingsRepository } from '../apps/api/src/modules/bookings/bookings.repository';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../apps/api/src/app';
-import { DatabaseService } from '../apps/api/src/database/database.service';
+import { DatabaseService } from '../apps/api/src/modules/database/database.service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const config = {

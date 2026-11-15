@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { Roles } from '../auth/session.guard';
-import { SceneRateLimitGuard } from '../common/rate-limit.guard';
-import { UuidPipe } from '../common/uuid.pipe';
+import { SceneRateLimitGuard } from '../../common/rate-limit.guard';
+import { UuidPipe } from '../../common/uuid.pipe';
 import { SceneGenerationService } from './scene-generation.service';
 
 @Controller('venues/:id')

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Param, Patch, Post, Req } from '@nestjs/common';
 import { Roles, type AuthenticatedRequest } from '../auth/session.guard';
-import { UuidPipe } from '../common/uuid.pipe';
+import { UuidPipe } from '../../common/uuid.pipe';
 import { AccountsService } from './accounts.service';
 
 @Controller('users')

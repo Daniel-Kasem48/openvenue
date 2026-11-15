@@ -172,7 +172,8 @@ reservation history cannot be removed, including through import.
 
 ```text
 apps/web/src/          React workspace, SVG editor and lazy-loaded 3D viewer
-apps/api/src/          NestJS AppModule, feature controllers and injectable services
+apps/api/src/          NestJS application bootstrap and shared helpers
+apps/api/src/modules/  Feature modules, controllers, services and repositories
 apps/api/migrations/   Initial schema (idempotent, locked during initialization)
 packages/contracts/   Zod validation, shared types and four template factories
 tests/                Contract tests and real PostgreSQL integration tests

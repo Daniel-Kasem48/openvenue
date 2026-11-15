@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { EntityManager } from '@mikro-orm/postgresql';
-import type { Principal } from '../auth/credentials';
-import { AuditLog } from '../database/entities';
+import type { Principal } from '../modules/auth/credentials';
+import { AuditLog } from '../modules/database/entities';
 export async function audit(
   em: EntityManager,
   principal: Principal,

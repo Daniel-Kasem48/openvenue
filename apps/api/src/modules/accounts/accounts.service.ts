@@ -5,7 +5,7 @@ import { createAccountSchema, updateAccountSchema } from '@openvenue/contracts';
 import { randomUUID } from 'node:crypto';
 import type { Principal } from '../auth/credentials';
 import { hashPassword, tokenHash } from '../auth/credentials';
-import { fail } from '../common/errors';
+import { fail } from '../../common/errors';
 import { DatabaseService } from '../database/database.service';
 import { Session, User } from '../database/entities';
 

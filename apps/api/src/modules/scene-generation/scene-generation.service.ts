@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { fail } from '../common/errors';
-import { APP_CONFIG, type AppConfig } from '../config';
+import { fail } from '../../common/errors';
+import { APP_CONFIG, type AppConfig } from '../../config';
 import { Venue } from '../database/entities';
 import { DatabaseService } from '../database/database.service';
 import { generateScene } from './generator';

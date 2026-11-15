@@ -1,7 +1,7 @@
 import { EntityRepository } from '@mikro-orm/postgresql';
 import { eventPricingSchema, type EventPricing } from '@openvenue/contracts';
 import type { Show } from '../database/entities';
-import { fail } from '../common/errors';
+import { fail } from '../../common/errors';
 
 export class ShowsRepository extends EntityRepository<Show> {
   async listManaged(venueId: string) {

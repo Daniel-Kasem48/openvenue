@@ -1,7 +1,7 @@
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { SceneGenerationError } from '../scene-generation/generator';
+import { SceneGenerationError } from '../modules/scene-generation/generator';
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {

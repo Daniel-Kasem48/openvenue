@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ArchiveGuard, Roles, type AuthenticatedRequest } from '../auth/session.guard';
-import { UuidPipe } from '../common/uuid.pipe';
+import { UuidPipe } from '../../common/uuid.pipe';
 import { VenuesService } from './venues.service';
 
 @Controller('venues')

@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import type { INestApplication } from '@nestjs/common';
-import { bookingsCsv, csvCell } from '../apps/api/src/bookings/booking-response';
+import { bookingsCsv, csvCell } from '../apps/api/src/modules/bookings/booking-response';
 import { createApp } from '../apps/api/src/app';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;

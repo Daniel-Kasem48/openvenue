@@ -1,16 +1,16 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
-import { AccountsModule } from './accounts/accounts.module';
+import { AccountsModule } from './modules/accounts/accounts.module';
 import { AppController } from './app.controller';
-import { AuthModule } from './auth/auth.module';
-import { BookingsModule } from './bookings/bookings.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import type { AppConfig } from './config';
-import { DatabaseModule } from './database/database.module';
-import { EventsModule } from './events/events.module';
-import { OverviewModule } from './overview/overview.module';
-import { SceneGenerationModule } from './scene-generation/scene-generation.module';
-import { VenuesModule } from './venues/venues.module';
+import { DatabaseModule } from './modules/database/database.module';
+import { EventsModule } from './modules/events/events.module';
+import { OverviewModule } from './modules/overview/overview.module';
+import { SceneGenerationModule } from './modules/scene-generation/scene-generation.module';
+import { VenuesModule } from './modules/venues/venues.module';
 @Module({})
 export class AppModule {
   static forRoot(config: AppConfig): DynamicModule {

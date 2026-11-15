@@ -1,8 +1,8 @@
 import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { loginSchema } from '@openvenue/contracts';
 import type { Request, Response } from 'express';
-import { LoginRateLimitGuard } from '../common/rate-limit.guard';
-import { APP_CONFIG, type AppConfig } from '../config';
+import { LoginRateLimitGuard } from '../../common/rate-limit.guard';
+import { APP_CONFIG, type AppConfig } from '../../config';
 import { AuthService } from './auth.service';
 import { Roles, type AuthenticatedRequest } from './session.guard';
 @Controller('auth')

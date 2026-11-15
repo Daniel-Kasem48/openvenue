@@ -1,6 +1,6 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from './config';
-import { DatabaseService } from './database/database.service';
+import { DatabaseService } from './modules/database/database.service';
 @Controller()
 export class AppController {
   constructor(

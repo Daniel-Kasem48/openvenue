@@ -10,8 +10,8 @@ import { LockMode, raw } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { z } from 'zod';
 import type { Principal } from '../auth/credentials';
-import { audit } from '../common/audit';
-import { fail } from '../common/errors';
+import { audit } from '../../common/audit';
+import { fail } from '../../common/errors';
 import { DatabaseService } from '../database/database.service';
 import { Booking, EventSeatBlock, Show, ShowPrice, Venue } from '../database/entities';
 const blockSeatsSchema = z.object({

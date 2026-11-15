@@ -13,8 +13,8 @@ import { LockMode } from '@mikro-orm/core';
 import { Venue } from '../database/entities';
 import { randomUUID } from 'node:crypto';
 import type { Principal } from '../auth/credentials';
-import { audit } from '../common/audit';
-import { fail } from '../common/errors';
+import { audit } from '../../common/audit';
+import { fail } from '../../common/errors';
 import { DatabaseService } from '../database/database.service';
 import { syncResources } from '../database/queries';
 
