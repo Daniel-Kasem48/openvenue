@@ -1,3 +1,19 @@
+import {
+  UtensilsCrossed,
+  SquareParking,
+  Clapperboard,
+  Trophy,
+  Layers,
+  LayoutGrid,
+  CalendarCheck,
+  ArrowUpRight,
+  Check,
+  Sparkles,
+  Map,
+  Box,
+  MapPin,
+  X,
+} from 'lucide-react';
 import { EventSeatControls } from './EventSeatControls';
 import { Modal } from './Modal';
 import { SceneBoundary } from './SceneBoundary';
@@ -23,11 +39,30 @@ import {
 import { api, json, localTime } from './api';
 import Map2D from './Map2D';
 const Map3D = lazy(() => import('./Map3D'));
-const types: Record<VenueKind, { icon: string; name: string; description: string }> = {
-  restaurant: { icon: '◉', name: 'Restaurant', description: 'Tables, chairs & good company' },
-  parking: { icon: '▤', name: 'Parking', description: 'A place for every arrival' },
-  stadium: { icon: '◉', name: 'Stadium', description: 'Sections, rows & match days' },
-  cinema: { icon: '▥', name: 'Cinema', description: 'Every seat has a story' },
+const types: Record<
+  VenueKind,
+  { icon: import('react').ReactNode; name: string; description: string }
+> = {
+  restaurant: {
+    icon: <UtensilsCrossed className="size-5" aria-hidden="true" strokeWidth={1.75} />,
+    name: 'Restaurant',
+    description: 'Tables, chairs & good company',
+  },
+  parking: {
+    icon: <SquareParking className="size-5" aria-hidden="true" strokeWidth={1.75} />,
+    name: 'Parking',
+    description: 'A place for every arrival',
+  },
+  stadium: {
+    icon: <Trophy className="size-5" aria-hidden="true" strokeWidth={1.75} />,
+    name: 'Stadium',
+    description: 'Sections, rows & match days',
+  },
+  cinema: {
+    icon: <Clapperboard className="size-5" aria-hidden="true" strokeWidth={1.75} />,
+    name: 'Cinema',
+    description: 'Every seat has a story',
+  },
 };
 const art: Record<VenueKind, string> = {
   restaurant: 'from-[#e7ecd6] to-[#f6f2e6] text-forest-600',
@@ -563,7 +598,11 @@ export default function App() {
           className="brand mb-9 flex items-center gap-2.5 px-2 font-display text-[19px] font-bold tracking-[-0.03em] text-white max-sm:mb-3"
         >
           <span className="grid size-8 place-items-center rounded-lg bg-sprout-300 text-[17px] text-forest-950">
-            ◈
+            <Layers
+              className="size-5 inline-block shrink-0"
+              aria-hidden="true"
+              strokeWidth={1.75}
+            />
           </span>{' '}
           openvenue
           <span className="ml-0.5 rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-forest-200 max-lg:hidden">
@@ -572,7 +611,14 @@ export default function App() {
         </a>
         <div className={sideLabel}>YOUR WORKSPACE</div>
         <button className={navItem(tab === 'map')} onClick={directory}>
-          <span className="text-base opacity-80">▦</span> Browse venues{' '}
+          <span className="text-base opacity-80">
+            <LayoutGrid
+              className="size-5 inline-block shrink-0"
+              aria-hidden="true"
+              strokeWidth={1.75}
+            />
+          </span>{' '}
+          Browse venues{' '}
           <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] text-forest-100 tabular-nums">
             {venues.length}
           </span>
@@ -583,7 +629,14 @@ export default function App() {
             className={navItem(tab === 'bookings')}
             onClick={showBookings}
           >
-            <span className="text-base opacity-80">▤</span> Reservations
+            <span className="text-base opacity-80">
+              <CalendarCheck
+                className="size-5 inline-block shrink-0"
+                aria-hidden="true"
+                strokeWidth={1.75}
+              />
+            </span>{' '}
+            Reservations
           </button>
         )}
         <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
@@ -623,7 +676,13 @@ export default function App() {
         )}
         <div className="mt-auto pt-6 max-sm:hidden">
           <div className="mb-3 flex gap-3 rounded-xl bg-white/[0.04] p-3 text-xs text-forest-100 ring-1 ring-white/5">
-            <span className="text-lg leading-none text-sprout-300">↗</span>
+            <span className="text-lg leading-none text-sprout-300">
+              <ArrowUpRight
+                className="size-4 inline-block shrink-0"
+                aria-hidden="true"
+                strokeWidth={1.75}
+              />
+            </span>
             <div>
               Made to be yours
               <small className="mt-0.5 text-[11px] text-forest-300/70">
@@ -657,7 +716,13 @@ export default function App() {
                 {admin ? 'Sign out' : 'Admin sign in'}
               </small>
             </span>
-            <span className="text-forest-300">↗</span>
+            <span className="text-forest-300">
+              <ArrowUpRight
+                className="size-4 inline-block shrink-0"
+                aria-hidden="true"
+                strokeWidth={1.75}
+              />
+            </span>
           </button>
         </div>
       </aside>
@@ -718,7 +783,7 @@ export default function App() {
                 aria-label="Dismiss error"
                 onClick={() => setError('')}
               >
-                ×
+                <X className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />
               </button>
             </div>
           )}
@@ -914,7 +979,11 @@ export default function App() {
                 className="confirmation-mark grid size-12 place-items-center rounded-full bg-forest-100 text-2xl text-forest-700 ring-8 ring-forest-50"
                 aria-hidden="true"
               >
-                ✓
+                <Check
+                  className="size-4 inline-block shrink-0"
+                  aria-hidden="true"
+                  strokeWidth={1.75}
+                />
               </div>
               <h2 className="mt-6 mb-1 text-[26px]">Reservation confirmed</h2>
               <p className="text-stone-500">Save these details for your arrival.</p>
@@ -1050,7 +1119,11 @@ export default function App() {
                       </button>
                       <button className="secondary" onClick={() => setModal('generate')}>
                         <span className="text-forest-500" aria-hidden="true">
-                          ✦
+                          <Sparkles
+                            className="size-4 inline-block shrink-0"
+                            aria-hidden="true"
+                            strokeWidth={1.75}
+                          />
                         </span>{' '}
                         Generate with Claude
                       </button>
@@ -1146,7 +1219,25 @@ export default function App() {
                       aria-pressed={view === v}
                       onClick={() => setView(v)}
                     >
-                      {v === '2d' ? '▦ 2D' : '◇ 3D'}
+                      {v === '2d' ? (
+                        <>
+                          <Map
+                            className="size-4 inline-block shrink-0"
+                            aria-hidden="true"
+                            strokeWidth={1.75}
+                          />{' '}
+                          2D
+                        </>
+                      ) : (
+                        <>
+                          <Box
+                            className="size-4 inline-block shrink-0"
+                            aria-hidden="true"
+                            strokeWidth={1.75}
+                          />{' '}
+                          3D
+                        </>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1277,7 +1368,15 @@ export default function App() {
                         <span
                           className={`mb-2 text-2xl ${bookingResources.length ? 'text-forest-600' : 'text-stone-400'}`}
                         >
-                          {resource ? types[current.kind].icon : '⌖'}
+                          {resource ? (
+                            types[current.kind].icon
+                          ) : (
+                            <MapPin
+                              className="size-4 inline-block shrink-0"
+                              aria-hidden="true"
+                              strokeWidth={1.75}
+                            />
+                          )}
                         </span>
                         <strong
                           className={`text-[13px] font-semibold ${bookingResources.length ? 'text-forest-900' : 'text-stone-600'}`}
@@ -1313,7 +1412,12 @@ export default function App() {
                               onClick={() => selectPlace(r.id)}
                               aria-label={`Remove ${r.label}`}
                             >
-                              {seatLocation(r)} ×
+                              {seatLocation(r)}{' '}
+                              <X
+                                className="size-4 inline-block shrink-0"
+                                aria-hidden="true"
+                                strokeWidth={1.75}
+                              />
                             </button>
                           ))}
                         </div>
@@ -1437,7 +1541,14 @@ export default function App() {
                               />
                             </label>
                             <button className="primary full h-10" disabled={working || !canReserve}>
-                              Confirm reservation <span>↗</span>
+                              Confirm reservation{' '}
+                              <span>
+                                <ArrowUpRight
+                                  className="size-4 inline-block shrink-0"
+                                  aria-hidden="true"
+                                  strokeWidth={1.75}
+                                />
+                              </span>
                             </button>
                           </form>
                         </>

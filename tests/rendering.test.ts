@@ -92,3 +92,18 @@ it('renders row letters and distinguishes blocked seats from bookings', () => {
   expect(markup).toContain('Blocked for this event');
   expect(markup).toContain('#c6cbd1');
 });
+
+it('uses decorative SVG icons without changing map control names', () => {
+  const markup = renderToStaticMarkup(
+    createElement(Map2D, {
+      floor: makeTemplate('restaurant').floors[0],
+      kind: 'restaurant',
+      busy: [],
+      editing: false,
+      onSelect: () => {},
+      onMove: () => {},
+    }),
+  );
+  expect(markup).toMatch(/aria-label="Zoom out"[^>]*><svg[^>]*aria-hidden="true"/);
+  expect(markup).toMatch(/aria-label="Zoom in"[^>]*><svg[^>]*aria-hidden="true"/);
+});

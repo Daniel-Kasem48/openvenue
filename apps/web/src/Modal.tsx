@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useRef, useEffect, type ReactNode } from 'react';
 export function Modal({
   title,
@@ -24,7 +25,7 @@ export function Modal({
           aria-label="Close dialog"
           onClick={onClose}
         >
-          ×
+          <X className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />
         </button>
       </div>
       {children}

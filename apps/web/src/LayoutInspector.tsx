@@ -1,3 +1,4 @@
+import { Download, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   currencySchema,
@@ -521,10 +522,16 @@ export function LayoutInspector({
       </div>
       <div className="import-export mt-4 flex items-center justify-between border-t border-stone-100 pt-3">
         <button className="text-button -ml-2" onClick={exportLayout}>
-          ↓ Export JSON
+          <Download
+            className="size-4 inline-block shrink-0"
+            aria-hidden="true"
+            strokeWidth={1.75}
+          />{' '}
+          Export JSON
         </button>
         <label className="file-button text-button relative m-0 cursor-pointer flex-row overflow-hidden">
-          ↑ Import JSON
+          <Upload className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />{' '}
+          Import JSON
           <input
             type="file"
             className="absolute inset-0 cursor-pointer opacity-0"

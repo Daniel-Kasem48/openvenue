@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import type { Group } from 'three';
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -361,7 +362,8 @@ export default function Map3D({
           setCameraRevision((v) => v + 1);
         }}
       >
-        ↺ Reset view
+        <RotateCcw className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />{' '}
+        Reset view
       </button>
       <span className="map-scale">
         {editing && <span>Select an item · Drag its arrows to move · </span>}

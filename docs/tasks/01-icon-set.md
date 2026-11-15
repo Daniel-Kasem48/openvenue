@@ -29,5 +29,5 @@ Use **lucide-react** icons everywhere a glyph is used as an icon.
 
 ## Acceptance
 
-- [ ] `grep -nE "[◉▤▥◈▦◇⌖↺✦]" apps/web/src` returns nothing.
-- [ ] All checks in the README pass.
+- [x] `grep -nE "[◉▤▥◈▦◇⌖↺✦]" apps/web/src` returns nothing.
+- [x] All checks in the README pass.

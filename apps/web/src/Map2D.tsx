@@ -1,3 +1,4 @@
+import { Minus, Plus } from 'lucide-react';
 import { seatRows, seatLocation, seatIdentity } from '@openvenue/contracts';
 import { Object2D } from './scene/Object2D';
 import { useRef, useState } from 'react';
@@ -341,7 +342,7 @@ export default function Map2D({
       </svg>
       <div className="map-zoom absolute right-4 bottom-4 flex overflow-hidden rounded-lg bg-white/95 shadow-sm ring-1 ring-stone-900/10 backdrop-blur max-sm:right-2.5 max-sm:bottom-3 [&>button]:px-3 [&>button]:py-1.5 [&>button]:text-[13px] [&>button]:text-stone-600 [&>button]:transition [&>button:hover]:bg-stone-50 [&>button:hover]:text-ink [&>button+button]:border-l [&>button+button]:border-stone-100">
         <button aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.6, z - 0.2))}>
-          −
+          <Minus className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />
         </button>
         <button
           onClick={() => {
@@ -353,7 +354,7 @@ export default function Map2D({
           Fit
         </button>
         <button aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(3, z + 0.2))}>
-          +
+          <Plus className="size-4 inline-block shrink-0" aria-hidden="true" strokeWidth={1.75} />
         </button>
       </div>
       <span className="map-scale">

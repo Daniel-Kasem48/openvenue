@@ -17,7 +17,7 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.
 - Administrator sign-in, reservation list and cancellation. Guest names are private.
-- Responsive interface, keyboard-selectable 2D resources, 3D resource dropdown.
+- Responsive interface, keyboard-selectable 2D resources, 3D resource dropdown, and consistent decorative SVG icons with accessible control names.
 
 ## Booking and management
 
