@@ -5,6 +5,12 @@ building, cinema, or stadium template; edit the layout and let guests reserve a 
 Fresh implementation by Daniel Kasem, inspired by the shared-scene approach in
 Spantrek. No Spantrek code, credentials, or artwork is included.
 
+## Demo
+
+Captioned stadium walkthrough: explore the 3D venue, select seats, and complete the booking dialogs.
+
+https://github.com/user-attachments/assets/9cac011b-7e0f-43d9-8022-82c01fffc43e
+
 ## What works
 
 - Restaurant: a furnished bistro with 12 round/rectangular tables, chairs, place settings, cocktail bar, reception and lounge.
