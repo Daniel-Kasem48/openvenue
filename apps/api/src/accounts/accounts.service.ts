@@ -23,9 +23,10 @@ function account(user: User) {
 async function lockOwner(em: EntityManager, principal: Principal) {
   // Serialize bootstrap and owner changes so two owners cannot remove the last owner.
   await em.execute('SELECT pg_advisory_xact_lock(745922)');
+  const users = em.getRepository(User);
   if (!principal.userId) {
-    if (await em.count(User)) fail(401, 'Sign in with your account.');
-  } else if (!(await em.count(User, { id: principal.userId, role: 'owner', disabled_at: null }))) {
+    if (await users.count()) fail(401, 'Sign in with your account.');
+  } else if (!(await users.count({ id: principal.userId, role: 'owner', disabled_at: null }))) {
     fail(403, 'Only an active owner can manage accounts.');
   }
 }
@@ -35,7 +36,9 @@ export class AccountsService {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
   async list() {
     const em = this.db.em;
-    return (await em.find(User, {}, { orderBy: { created_at: 'asc', id: 'asc' } })).map(account);
+    return (
+      await em.getRepository(User).find({}, { orderBy: { created_at: 'asc', id: 'asc' } })
+    ).map(account);
   }
   async create(input: unknown, principal: Principal, sessionToken: string) {
     const body = createAccountSchema.parse(input);
@@ -43,11 +46,12 @@ export class AccountsService {
     const em = this.db.em;
     return em.transactional(async (em) => {
       await lockOwner(em, principal);
+      const users = em.getRepository(User);
       if (!principal.userId && body.role !== 'owner')
         fail(400, 'The first account must be an owner.');
-      if (await em.count(User, { email: body.email }))
+      if (await users.count({ email: body.email }))
         fail(409, 'An account with that email already exists.');
-      const user = em.create(User, {
+      const user = users.create({
         id: randomUUID(),
         email: body.email,
         name: body.name,
@@ -57,11 +61,9 @@ export class AccountsService {
       });
       await em.flush();
       if (!principal.userId)
-        await em.nativeUpdate(
-          Session,
-          { token_hash: tokenHash(sessionToken) },
-          { user_id: user.id },
-        );
+        await em
+          .getRepository(Session)
+          .nativeUpdate({ token_hash: tokenHash(sessionToken) }, { user_id: user.id });
       return account(user);
     });
   }
@@ -70,7 +72,8 @@ export class AccountsService {
     const em = this.db.em;
     return em.transactional(async (em) => {
       await lockOwner(em, principal);
-      const old = await em.findOne(User, { id }, { lockMode: LockMode.PESSIMISTIC_WRITE });
+      const users = em.getRepository(User);
+      const old = await users.findOne({ id }, { lockMode: LockMode.PESSIMISTIC_WRITE });
       if (!old) return fail(404, 'Account not found');
       const role = body.role ?? old.role,
         disabledAt =
@@ -83,7 +86,7 @@ export class AccountsService {
         old.role === 'owner' &&
         !old.disabled_at &&
         (role !== 'owner' || disabledAt) &&
-        !(await em.count(User, { role: 'owner', disabled_at: null, id: { $ne: old.id } }))
+        !(await users.count({ role: 'owner', disabled_at: null, id: { $ne: old.id } }))
       )
         fail(409, 'Keep at least one active owner.');
       old.role = role;

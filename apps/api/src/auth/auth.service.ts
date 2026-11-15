@@ -16,11 +16,12 @@ export class AuthService {
   }
   async verifyLogin(email: string | undefined, value: string): Promise<Principal | null> {
     const em = this.db.em;
-    if (!(await em.count(User)))
+    const users = em.getRepository(User);
+    if (!(await users.count()))
       return (await verifyPassword(value, await this.legacyHash))
         ? { userId: null, name: 'Administrator', role: 'owner' }
         : null;
-    const user = await em.findOne(User, { email: email ?? '' });
+    const user = await users.findOne({ email: email ?? '' });
     const matches = await verifyPassword(value, user?.password_hash ?? (await this.legacyHash));
     return user && !user.disabled_at && matches
       ? { userId: user.id, name: user.name, role: user.role }
@@ -33,8 +34,9 @@ export class AuthService {
     const em = this.db.em;
     const [{ now: databaseTime }] = await em.execute<{ now: string }[]>('SELECT now()');
     const now = new Date(databaseTime);
-    await em.nativeDelete(Session, { expires_at: { $lte: now } });
-    em.create(Session, {
+    const sessions = em.getRepository(Session);
+    await sessions.nativeDelete({ expires_at: { $lte: now } });
+    sessions.create({
       token_hash: tokenHash(token),
       expires_at: new Date(now.getTime() + 8 * 60 * 60 * 1000),
       user_id: principal.userId,
@@ -48,15 +50,16 @@ export class AuthService {
     const em = this.db.em;
     const [{ now: databaseTime }] = await em.execute<{ now: string }[]>('SELECT now()');
     const now = new Date(databaseTime);
-    const session = await em.findOne(Session, {
+    const users = em.getRepository(User);
+    const session = await em.getRepository(Session).findOne({
       token_hash: tokenHash(token),
       expires_at: { $gt: now },
     });
     if (session) {
       if (session.user_id) {
-        const user = await em.findOne(User, { id: session.user_id, disabled_at: null });
+        const user = await users.findOne({ id: session.user_id, disabled_at: null });
         if (user) return { userId: user.id, name: user.name, role: user.role };
-      } else if (!(await em.count(User))) {
+      } else if (!(await users.count())) {
         return { userId: null, name: 'Administrator', role: 'owner' };
       }
     }
@@ -64,6 +67,6 @@ export class AuthService {
   }
   async logout(token: unknown) {
     if (typeof token === 'string')
-      await this.db.em.nativeDelete(Session, { token_hash: tokenHash(token) });
+      await this.db.em.getRepository(Session).nativeDelete({ token_hash: tokenHash(token) });
   }
 }

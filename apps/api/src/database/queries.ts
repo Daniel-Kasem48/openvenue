@@ -7,7 +7,8 @@ import { Resource, Show, Venue } from './entities';
 export async function syncResources(em: EntityManager, venueId: string, layout: Layout) {
   const resources = layout.floors.flatMap((f) => f.resources);
   const ids = resources.map((r) => r.id);
-  if (await em.count(Resource, { id: { $in: ids }, venue_id: { $ne: venueId } }))
+  const resourceRepository = em.getRepository(Resource);
+  if (await resourceRepository.count({ id: { $in: ids }, venue_id: { $ne: venueId } }))
     throw Object.assign(new Error('Resource identifiers belong to another venue'), { status: 409 });
   await em.execute(
     `DELETE FROM event_seat_blocks b USING shows s, resources r
@@ -15,7 +16,7 @@ export async function syncResources(em: EntityManager, venueId: string, layout: 
        AND NOT (r.id=ANY(ARRAY[?]::uuid[])) AND s.ends_at<=now()`,
     [venueId, ids],
   );
-  await em.nativeDelete(Resource, { venue_id: venueId, id: { $nin: ids } });
+  await resourceRepository.nativeDelete({ venue_id: venueId, id: { $nin: ids } });
   for (const resource of resources) {
     // The ownership predicate also protects concurrent inserts from another venue.
     const rows = await em.execute(
@@ -51,7 +52,9 @@ export async function initialize(em: EntityManager) {
   await em.transactional(async (em) => {
     await em.execute('SELECT pg_advisory_xact_lock(745921)');
     for (const script of scripts) await em.execute(script);
-    if (await em.count(Venue, {})) return;
+    const venues = em.getRepository(Venue);
+    const shows = em.getRepository(Show);
+    if (await venues.count()) return;
     for (const [kind, name] of [
       ['restaurant', 'The Greenhouse'],
       ['parking', 'Central Parking'],
@@ -60,14 +63,14 @@ export async function initialize(em: EntityManager) {
     ] as [VenueKind, string][]) {
       const id = randomUUID(),
         layout = makeTemplate(kind);
-      em.create(Venue, { id, name, kind, layout });
+      venues.create({ id, name, kind, layout });
       await em.flush();
       await syncResources(em, id, layout);
       if (kind === 'cinema' || kind === 'stadium') {
         const start = new Date();
         start.setDate(start.getDate() + 1);
         start.setHours(19, 0, 0, 0);
-        em.create(Show, {
+        shows.create({
           id: randomUUID(),
           venue_id: id,
           title: kind === 'stadium' ? 'Community Cup · sample match' : 'A night at the movies',

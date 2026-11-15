@@ -19,3 +19,11 @@ No production database connection or destructive schema synchronization is part 
 ## Results
 
 105 unit/API tests and all 41 browser tests passed. Build/typecheck, formatting and diff checks passed. Existing database compatibility and fresh database initialization were both exercised. Review preserved the single-query event pricing snapshot, database-clock behavior, row-lock order and transaction rollback. No production database or live ticketing provider was accessed.
+
+## Repository and booking-service refactor
+
+Use MikroORM entity repositories for ordinary CRUD across the backend. Custom BookingsRepository, ShowsRepository and VenuesRepository own specialized persistence queries, including the atomic pricing snapshot. Obtain repositories from each operation or transaction's manager; never keep a singleton repository bound to a fork shared by requests.
+
+BookingsService coordinates repository calls and a single transactional flush. Pure booking-policy functions handle selection, pricing validation and state changes; explicit response functions keep private attendee data out of public confirmations. Existing booking, role, audit, pagination and concurrency tests remain the regression checks. No strategy hierarchy is needed for the current venue rules.
+
+Repository refactor verification: all 105 unit/API tests and 41 browser tests passed, including transactional audit rollback, concurrent checkout, blocked seats, role enforcement and confirmation privacy. Build/typecheck, formatting and diff checks passed. Review found no remaining behavior regressions.

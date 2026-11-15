@@ -22,25 +22,13 @@ import { syncResources } from '../database/queries';
 export class VenuesService {
   constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
   async list(query: Record<string, unknown>) {
-    const rows = await this.db.em.execute(
-      `SELECT v.*, v.archived_at AS "archivedAt", e.next_event_at AS "nextEventAt"
-             FROM venues v LEFT JOIN (
-               SELECT venue_id, min(starts_at) AS next_event_at FROM shows
-               WHERE starts_at > now() GROUP BY venue_id
-             ) e ON e.venue_id=v.id AND v.kind IN ('cinema','stadium')
-             WHERE (? OR v.archived_at IS NULL) ORDER BY v.name`,
-      [query.includeArchived === '1'],
-    );
-    return rows.map((row) => ({
-      ...row,
-      archived_at: row.archived_at == null ? null : new Date(row.archived_at),
-      archivedAt: row.archivedAt == null ? null : new Date(row.archivedAt),
-      nextEventAt: row.nextEventAt == null ? null : new Date(row.nextEventAt),
-    }));
+    return this.db.em.getRepository(Venue).listWithNextEvent(query.includeArchived === '1');
   }
+
   async create(input: unknown) {
     const body = createVenueSchema.parse(input);
     const venue = await this.db.em.transactional(async (em) => {
+      const venues = em.getRepository(Venue);
       let layout = makeTemplate(body.kind);
       if (body.empty && body.sourceId) fail(400, 'Choose an empty layout or duplicate a venue');
       if (body.empty)
@@ -50,12 +38,12 @@ export class VenuesService {
           floors: [{ ...layout.floors[0], name: 'Main floor', resources: [], objects: [] }],
         };
       if (body.sourceId) {
-        const source = await em.findOne(Venue, body.sourceId);
+        const source = await venues.findOne(body.sourceId);
         if (!source) return fail(404, 'Source venue not found');
         if (source.kind !== body.kind) fail(400, 'Duplicate must use the same venue type');
         layout = cloneLayout(layoutSchema.parse(source.layout));
       }
-      const row = em.create(Venue, {
+      const row = venues.create({
         id: randomUUID(),
         name: body.name,
         kind: body.kind,
@@ -71,7 +59,9 @@ export class VenuesService {
   async update(id: string, input: unknown) {
     const body = patchVenueSchema.parse(input);
     const venue = await this.db.em.transactional(async (em) => {
-      const old = await em.findOne(Venue, id, { lockMode: LockMode.PESSIMISTIC_WRITE });
+      const old = await em
+        .getRepository(Venue)
+        .findOne(id, { lockMode: LockMode.PESSIMISTIC_WRITE });
       if (!old) return fail(404, 'Venue not found');
       if (old.revision !== body.revision)
         fail(409, 'This venue changed elsewhere. Reload before editing.');
@@ -93,7 +83,8 @@ export class VenuesService {
   async saveLayout(id: string, input: unknown, principal: Principal) {
     const body = saveVenueSchema.parse(input);
     const venue = await this.db.em.transactional(async (em) => {
-      const old = await em.findOne(Venue, id, { lockMode: LockMode.PESSIMISTIC_WRITE });
+      const venues = em.getRepository(Venue);
+      const old = await venues.findOne(id, { lockMode: LockMode.PESSIMISTIC_WRITE });
       if (!old) return fail(404, 'Venue not found');
       if (old.revision !== body.revision)
         fail(409, 'This layout changed elsewhere. Reload before editing.');
@@ -105,14 +96,7 @@ export class VenuesService {
       }[old.kind as 'restaurant' | 'parking' | 'cinema' | 'stadium'];
       if (body.layout.floors.some((f) => f.resources.some((r) => r.kind !== resourceKind)))
         fail(400, 'Resource type does not match this venue');
-      const eventPrices = await em.execute(
-        `SELECT s.price_multiplier,
-          coalesce(json_agg(json_build_object('tierId', p.tier_id, 'amount', p.amount))
-            FILTER (WHERE p.tier_id IS NOT NULL), '[]') AS overrides
-        FROM shows s LEFT JOIN show_prices p ON p.show_id=s.id
-        WHERE s.venue_id=? AND s.ends_at>now() GROUP BY s.id`,
-        [old.id],
-      );
+      const eventPrices = await venues.readActivePricing(old.id);
       const resources = body.layout.floors.flatMap((floor) => floor.resources);
       for (const row of eventPrices) {
         const pricing = eventPricingSchema.parse({

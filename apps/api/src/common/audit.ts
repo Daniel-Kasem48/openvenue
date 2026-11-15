@@ -9,7 +9,7 @@ export async function audit(
   entity: string,
   id: string,
 ) {
-  em.create(AuditLog, {
+  em.getRepository(AuditLog).create({
     id: randomUUID(),
     user_id: principal.userId,
     action,

@@ -3,7 +3,8 @@ import type { INestApplication } from '@nestjs/common';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { randomUUID } from 'node:crypto';
 import { makeTemplate } from '@openvenue/contracts';
-import { Venue } from '../apps/api/src/database/entities';
+import { Booking, Venue } from '../apps/api/src/database/entities';
+import { BookingsRepository } from '../apps/api/src/bookings/bookings.repository';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../apps/api/src/app';
 import { DatabaseService } from '../apps/api/src/database/database.service';
@@ -39,15 +40,16 @@ describe.skipIf(!databaseUrl)('Nest application lifecycle and routing', () => {
     const first = db.em,
       second = db.em;
     expect(first).not.toBe(second);
-    const [venue] = await first.find(Venue, {}, { limit: 1 });
+    expect(first.getRepository(Booking)).toBeInstanceOf(BookingsRepository);
+    const [venue] = await first.getRepository(Venue).find({}, { limit: 1 });
     expect(venue).toBeDefined();
     const originalName = venue.name;
     venue.name = 'Unflushed private change';
-    expect((await second.findOneOrFail(Venue, venue.id)).name).toBe(originalName);
+    expect((await second.getRepository(Venue).findOneOrFail(venue.id)).name).toBe(originalName);
     const id = randomUUID();
     await expect(
       db.em.transactional(async (em) => {
-        em.create(Venue, {
+        em.getRepository(Venue).create({
           id,
           name: 'Rolled back ORM venue',
           kind: 'parking',
@@ -57,7 +59,7 @@ describe.skipIf(!databaseUrl)('Nest application lifecycle and routing', () => {
         throw new Error('Abort after flush');
       }),
     ).rejects.toThrow('Abort after flush');
-    expect(await db.em.count(Venue, { id })).toBe(0);
+    expect(await db.em.getRepository(Venue).count({ id })).toBe(0);
   });
   it('checks permissions before consuming the scene-generation allowance', async () => {
     app = await createApp(config);

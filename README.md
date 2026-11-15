@@ -194,7 +194,11 @@ Explicit `@Inject(...)` tokens keep dependency injection compatible with the exi
 runtime, which does not emit decorator type metadata. Explicit `EntitySchema` mappings cover all
 nine tables and foreign keys. Each service operation uses an isolated EntityManager fork;
 transaction callbacks share that manager with pricing, inventory and audit helpers. Ordinary CRUD
-uses ORM entities, while reports, advisory locks and the guarded inventory upsert use SQL through
+uses entity repositories. Custom booking, venue and show repositories own their queries;
+repositories are obtained from the current manager so transaction scope is preserved. Booking
+rules live in `booking-policy.ts`, and public/admin response mapping and CSV rendering live in
+`booking-response.ts`. The booking service coordinates the unit of work and flushes a multi-seat
+reservation once. Reports, advisory locks and the guarded inventory upsert use SQL through
 MikroORM. Existing SQL migrations preserve PostgreSQL-specific constraints; startup never runs
 automatic schema synchronization. Node 22.17+ is required (Docker and CI use Node 24).
 Direct `pg` access is retained only in integration-test fixtures.

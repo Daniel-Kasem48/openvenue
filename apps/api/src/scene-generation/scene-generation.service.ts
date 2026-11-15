@@ -15,7 +15,7 @@ export class SceneGenerationService {
   async generate(id: string, input: unknown) {
     const { prompt } = z.object({ prompt: z.string().trim().min(10).max(4000) }).parse(input);
 
-    const venue = await this.db.em.findOne(Venue, { id });
+    const venue = await this.db.em.getRepository(Venue).findOne({ id });
     if (!venue) fail(404, 'Venue not found');
     return await generateScene(prompt, venue.kind, {
       apiKey: this.config.anthropicApiKey,

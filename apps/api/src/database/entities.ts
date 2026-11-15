@@ -1,8 +1,12 @@
-import { EntitySchema, type OptionalProps } from '@mikro-orm/core';
+import { BookingsRepository } from '../bookings/bookings.repository';
+import { ShowsRepository } from '../events/shows.repository';
+import { VenuesRepository } from '../venues/venues.repository';
+import { EntitySchema, type EntityRepositoryType, type OptionalProps } from '@mikro-orm/core';
 import type { Layout, VenueKind } from '@openvenue/contracts';
 
 // Map the existing schema; SQL migrations retain its checks and exclusion constraints.
 export interface Venue {
+  [EntityRepositoryType]?: VenuesRepository;
   [OptionalProps]?: 'revision' | 'archived_at';
   id: string;
   name: string;
@@ -13,6 +17,7 @@ export interface Venue {
 }
 export const Venue = new EntitySchema<Venue>({
   name: 'Venue',
+  repository: () => VenuesRepository,
   tableName: 'venues',
   properties: {
     id: { type: 'uuid', primary: true },
@@ -40,6 +45,7 @@ export const Resource = new EntitySchema<Resource>({
 });
 
 export interface Show {
+  [EntityRepositoryType]?: ShowsRepository;
   [OptionalProps]?: 'price_multiplier';
   id: string;
   venue_id: string;
@@ -50,6 +56,7 @@ export interface Show {
 }
 export const Show = new EntitySchema<Show>({
   name: 'Show',
+  repository: () => ShowsRepository,
   tableName: 'shows',
   properties: {
     id: { type: 'uuid', primary: true },
@@ -68,6 +75,7 @@ export const Show = new EntitySchema<Show>({
 });
 
 export interface Booking {
+  [EntityRepositoryType]?: BookingsRepository;
   [OptionalProps]?:
     | 'show_id'
     | 'status'
@@ -102,6 +110,7 @@ export interface Booking {
 }
 export const Booking = new EntitySchema<Booking>({
   name: 'Booking',
+  repository: () => BookingsRepository,
   tableName: 'bookings',
   properties: {
     id: { type: 'uuid', primary: true },
