@@ -145,7 +145,18 @@ export async function createApp(config: {
     next();
   });
   router.get('/venues', async (_req, res) => {
-    res.json((await pool.query('SELECT * FROM venues ORDER BY name')).rows);
+    res.json(
+      (
+        await pool.query(`
+      SELECT v.*, e.next_event_at AS "nextEventAt"
+      FROM venues v LEFT JOIN (
+        SELECT venue_id, min(starts_at) AS next_event_at FROM shows
+        WHERE starts_at > now() GROUP BY venue_id
+      ) e ON e.venue_id=v.id AND v.kind IN ('cinema', 'stadium')
+      ORDER BY v.name
+    `)
+      ).rows,
+    );
   });
   router.post('/venues', guard, async (req, res) => {
     const body = createVenueSchema.parse(req.body);

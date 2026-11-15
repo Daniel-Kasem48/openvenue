@@ -39,6 +39,27 @@ describe.skipIf(!databaseUrl)('PostgreSQL reservation API', () => {
     await app?.close();
     await pool.end();
   });
+  it('lists the next future event date without dropping venues with no events', async () => {
+    const cinema = await (
+      await request('/venues', { kind: 'cinema', name: 'Thumbnail cinema' }, true)
+    ).json();
+    for (const [start, end] of [
+      ['2000-01-01T12:00:00Z', '2000-01-01T14:00:00Z'],
+      ['2092-01-01T12:00:00Z', '2092-01-01T14:00:00Z'],
+      ['2091-01-01T12:00:00Z', '2091-01-01T14:00:00Z'],
+    ])
+      await pool.query('INSERT INTO shows VALUES(gen_random_uuid(),$1,$2,$3,$4)', [
+        cinema.id,
+        'Preview event',
+        start,
+        end,
+      ]);
+    const listed = await (await request('/venues')).json();
+    expect(listed.find((v: any) => v.id === cinema.id).nextEventAt).toBe(
+      '2091-01-01T12:00:00.000Z',
+    );
+    expect(listed.find((v: any) => v.id === venue.id).nextEventAt).toBeNull();
+  });
   it('protects admin data and rejects cross-origin mutations', async () => {
     expect((await request('/bookings')).status).toBe(401);
     expect((await request('/venues', { kind: 'parking', name: 'Unauthorized' })).status).toBe(401);

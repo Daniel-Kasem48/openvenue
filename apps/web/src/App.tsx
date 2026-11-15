@@ -1,4 +1,5 @@
 import { Menu } from './Menu';
+import { LayoutThumbnail } from './LayoutThumbnail';
 import {
   UtensilsCrossed,
   SquareParking,
@@ -63,12 +64,6 @@ const types: Record<
     name: 'Cinema',
     description: 'Every seat has a story',
   },
-};
-const art: Record<VenueKind, string> = {
-  restaurant: 'from-[#e7ecd6] to-[#f6f2e6] text-forest-600',
-  parking: 'from-[#dde6e7] to-[#eef2f1] text-[#476677]',
-  stadium: 'from-[#d5e8d4] to-[#eef4e1] text-[#397b50]',
-  cinema: 'from-[#e3deee] to-[#f2eef4] text-[#6b557e]',
 };
 export default function App() {
   const [step, setStep] = useState<'venues' | 'time' | 'place' | 'review' | 'done'>('venues');
@@ -364,7 +359,7 @@ export default function App() {
         `/venues/${draft.id}`,
         json({ layout: parsed, name: draft.name, revision: draft.revision }, 'PUT'),
       );
-      setVenues((v) => v.map((x) => (x.id === result.id ? result : x)));
+      setVenues((v) => v.map((x) => (x.id === result.id ? { ...x, ...result } : x)));
       setDraft(result);
       setDirty(false);
       setEditing(false);
@@ -930,12 +925,7 @@ export default function App() {
                       className="panel directory-card flex flex-col transition duration-200 hover:-translate-y-0.5 hover:shadow-float"
                       key={v.id}
                     >
-                      <div
-                        className={`venue-art grid h-36 place-items-center bg-linear-to-br text-6xl ${art[v.kind]}`}
-                        aria-hidden="true"
-                      >
-                        {types[v.kind].icon}
-                      </div>
+                      <LayoutThumbnail venue={v} />
                       <div className="directory-details flex flex-1 flex-col p-6">
                         <div className="eyebrow">{types[v.kind].name}</div>
                         <h2 className="mt-2 mb-1">{v.name}</h2>
@@ -949,6 +939,14 @@ export default function App() {
                           · {v.layout.floors.length}{' '}
                           {v.layout.floors.length === 1 ? 'floor' : 'floors'}
                         </p>
+                        {['cinema', 'stadium'].includes(v.kind) && v.nextEventAt && (
+                          <p className="mb-4 text-[13px] text-stone-500">
+                            Next event ·{' '}
+                            <time dateTime={v.nextEventAt}>
+                              {new Date(v.nextEventAt).toLocaleString()}
+                            </time>
+                          </p>
+                        )}
                         <button
                           className="primary full mt-auto h-auto min-h-9 py-2 text-left whitespace-normal"
                           onClick={() => chooseVenue(v.id)}
@@ -1733,6 +1731,7 @@ export default function App() {
                 setShows((s) => [...s, show]);
                 setShowId(show.id);
                 setModal(null);
+                await load();
                 setMessage('Showtime added.');
               });
             }}

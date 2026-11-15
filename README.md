@@ -194,3 +194,8 @@ Provider reference: [Claude structured outputs](https://platform.claude.com/docs
 Venue actions: Edit layout is the main action in view mode; Duplicate and Generate with Claude
 are in the keyboard-accessible More venue actions menu. While editing, Save layout is enabled
 only after changes, with an unsaved indicator beside the venue name.
+
+Directory cards preview the first floor with lightweight, noninteractive SVG geometry and show
+next event dates for cinema and stadium venues. Previews refresh after saved layout changes;
+booking and management buttons retain their existing labels. The venue listing includes optional
+`nextEventAt` metadata (null when no future event exists), computed in one grouped database query.

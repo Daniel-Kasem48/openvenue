@@ -117,7 +117,15 @@ export const layoutSchema = z
   });
 export type Layout = z.infer<typeof layoutSchema>;
 export type Floor = Layout['floors'][number];
-export type Venue = { id: string; name: string; kind: VenueKind; layout: Layout; revision: number };
+export const venueSchema = z.object({
+  id: uuid,
+  name,
+  kind: kindSchema,
+  layout: layoutSchema,
+  revision: z.number().int().nonnegative(),
+  nextEventAt: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+export type Venue = z.infer<typeof venueSchema>;
 export type Show = { id: string; title: string; start: string; end: string };
 export type Booking = {
   id: string;
