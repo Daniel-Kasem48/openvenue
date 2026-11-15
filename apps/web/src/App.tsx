@@ -22,6 +22,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { Team } from './Team';
 import { Reservations } from './Reservations';
 import { Events } from './Events';
 import { Overview } from './Overview';
@@ -39,6 +40,7 @@ import {
   cloneLayout,
   intervalSchema,
   layoutSchema,
+  type Session,
   type Booking,
   type ManagedEvent,
   type Layout,
@@ -98,10 +100,11 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
   const [floorIndex, setFloorIndex] = useState(0),
     [selected, setSelected] = useState(''),
     [view, setView] = useState<'2d' | '3d'>('3d');
-  const [admin, setAdmin] = useState(false),
-    [editing, setEditing] = useState(false),
+  const [session, setSession] = useState<Session | null>(null);
+  const admin = !publicBooking && !!session && session.role !== 'staff';
+  const [editing, setEditing] = useState(false),
     [dirty, setDirty] = useState(false),
-    [tab, setTab] = useState<'map' | 'bookings' | 'overview'>('map');
+    [tab, setTab] = useState<'map' | 'bookings' | 'overview' | 'team'>('map');
   const [modal, setModal] = useState<'login' | 'venue' | 'show' | 'generate' | 'settings' | null>(
       null,
     ),
@@ -109,15 +112,18 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
   const [kind, setKind] = useState<VenueKind>('restaurant'),
     [newName, setNewName] = useState(''),
     [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const openLogin = () => {
     setError('');
     setPassword('');
+    setEmail('');
     setShowPassword(false);
     setModal('login');
   };
   const closeLogin = () => {
     setPassword('');
+    setEmail('');
     setShowPassword(false);
     setError('');
     setModal(null);
@@ -164,7 +170,7 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
   const [priceQuote, setPriceQuote] = useState<{
     key: string;
     prices: Record<string, number>;
-    currency: string;
+    currency: Venue['layout']['pricing']['currency'];
   } | null>(null);
   const [error, setError] = useState(''),
     [message, setMessage] = useState(''),
@@ -308,11 +314,33 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
     });
     return () => controller.abort();
   }, [admin]);
+  const refreshSession = async () => {
+    try {
+      const currentSession = await api<Session>('/auth/me');
+      setSession(currentSession);
+      if (currentSession.role !== 'owner') setTab('overview');
+    } catch {
+      await api('/auth/logout', json({})).catch(() => {});
+      setSession(null);
+      setTab('map');
+      setStep('venues');
+    }
+  };
+  const signOut = () =>
+    run(async () => {
+      if (dirty && !confirm('Discard unsaved changes and sign out?')) return;
+      await api('/auth/logout', json({}));
+      setSession(null);
+      setEditing(false);
+      setDirty(false);
+      setTab('map');
+      setStep('venues');
+    });
   useEffect(() => {
     if (publicBooking) return;
-    api('/auth/me')
-      .then(() => {
-        setAdmin(true);
+    api<Session>('/auth/me')
+      .then((session) => {
+        setSession(session);
         setTab('overview');
       })
       .catch(() => {});
@@ -347,7 +375,12 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
     if (!venueId || !timeStart || !timeEnd || (seatVenue && !showId)) return;
     const controller = new AbortController();
     const update = () =>
-      api<{ busy: string[]; blocked: string[]; prices: Record<string, number>; currency: string }>(
+      api<{
+        busy: string[];
+        blocked: string[];
+        prices: Record<string, number>;
+        currency: Venue['layout']['pricing']['currency'];
+      }>(
         `/venues/${venueId}/availability?${new URLSearchParams({ start: timeStart, end: timeEnd, ...(seatVenue ? { showId } : {}) })}`,
         { signal: controller.signal },
       )
@@ -730,6 +763,22 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
         </p>
       </main>
     );
+  if (!publicBooking && session?.role === 'staff')
+    return (
+      <main className="mx-auto max-w-[1600px] p-4 sm:p-8">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            {session.user?.name} · {session.role}
+          </span>
+          <button className="secondary" aria-label="Sign out" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </header>
+        {error && <p role="alert">{error}</p>}
+        <p role="status">{message}</p>
+        <Reservations staff onMessage={setMessage} onChange={() => setRefresh((n) => n + 1)} />
+      </main>
+    );
   return (
     <div
       className={
@@ -797,6 +846,19 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
                 />
               </span>{' '}
               Reservations
+            </button>
+          )}
+          {session?.role === 'owner' && (
+            <button
+              className={navItem(tab === 'team')}
+              onClick={() => {
+                if (dirty && !confirm('Discard unsaved layout changes?')) return;
+                setEditing(false);
+                setDirty(false);
+                setTab('team');
+              }}
+            >
+              Team
             </button>
           )}
           <div className="mx-3 my-5 h-px bg-white/10 max-sm:hidden" />
@@ -915,8 +977,8 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
               + New venue
             </button>
           )}
-          <div className="mt-auto pt-6 max-sm:hidden">
-            <div className="mb-3 flex gap-3 rounded-xl bg-white/[0.04] p-3 text-xs text-forest-100 ring-1 ring-white/5">
+          <div className="mt-auto pt-6 max-sm:pt-2">
+            <div className="mb-3 flex gap-3 max-sm:hidden rounded-xl bg-white/[0.04] p-3 text-xs text-forest-100 ring-1 ring-white/5">
               <span className="text-lg leading-none text-sprout-300">
                 <ArrowUpRight
                   className="size-4 inline-block shrink-0"
@@ -933,27 +995,16 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
             </div>
             <button
               className="profile flex w-full items-center gap-3 rounded-xl p-2 text-left text-[13px] text-white transition hover:bg-white/5"
-              onClick={() =>
-                admin
-                  ? run(async () => {
-                      if (dirty && !confirm('Discard unsaved changes and sign out?')) return;
-                      await api('/auth/logout', json({}));
-                      setAdmin(false);
-                      setEditing(false);
-                      setDirty(false);
-                      setTab('map');
-                      setStep('venues');
-                    })
-                  : openLogin()
-              }
+              aria-label={admin ? 'Sign out' : undefined}
+              onClick={() => (admin ? void signOut() : openLogin())}
             >
               <span className="avatar grid size-9 shrink-0 place-items-center rounded-full bg-sprout-300/15 text-xs font-semibold text-sprout-300 ring-1 ring-sprout-300/25">
                 {admin ? 'AD' : 'G'}
               </span>
               <span className="min-w-0 flex-1">
-                {admin ? 'Administrator' : 'Guest booking'}
+                {admin ? (session?.user?.name ?? 'Setup owner') : 'Guest booking'}
                 <small className="mt-0.5 text-[11px] text-forest-300">
-                  {admin ? 'Sign out' : 'Admin sign in'}
+                  {admin ? `${session?.role} · Sign out` : 'Admin sign in'}
                 </small>
               </span>
               <span className="text-forest-300">
@@ -973,13 +1024,15 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
             <div>
               Workspace <span className="mx-2 text-stone-300">/</span>{' '}
               <span className="font-medium text-ink">
-                {tab === 'overview'
-                  ? 'Overview'
-                  : tab === 'bookings'
-                    ? 'Reservations'
-                    : admin
-                      ? 'Venue management'
-                      : 'Book a place'}
+                {tab === 'team'
+                  ? 'Team'
+                  : tab === 'overview'
+                    ? 'Overview'
+                    : tab === 'bookings'
+                      ? 'Reservations'
+                      : admin
+                        ? 'Venue management'
+                        : 'Book a place'}
               </span>
             </div>
             <div className="flex items-center gap-2.5 max-md:hidden">
@@ -1053,7 +1106,17 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
           {!admin && tab === 'map' && (publicBooking || step !== 'done') && (
             <BookingProgress step={step} publicPage={!!publicBooking} />
           )}
-          {tab === 'overview' && admin ? (
+          {tab === 'overview' && session?.bootstrap && (
+            <p className="mb-4">
+              Replace the shared setup password with your own account.{' '}
+              <button className="text-button" onClick={() => setTab('team')}>
+                Create first owner
+              </button>
+            </p>
+          )}
+          {tab === 'team' && session?.role === 'owner' ? (
+            <Team bootstrap={session.bootstrap} onChange={refreshSession} />
+          ) : tab === 'overview' && admin ? (
             <Overview
               onReservations={showBookings}
               onEvent={(id, eventId) => {
@@ -1838,15 +1901,27 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                await api('/auth/login', json({ password }));
-                setAdmin(true);
+                await api(
+                  '/auth/login',
+                  json({ password, ...(email.trim() ? { email: email.trim() } : {}) }),
+                );
+                setSession(await api<Session>('/auth/me'));
                 closeLogin();
                 setTab('overview');
                 setStep('venues');
-                setMessage('Signed in as administrator.');
+                setMessage('Signed in.');
               });
             }}
           >
+            <label>
+              Email
+              <input
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
             <label>
               Password
               <input
@@ -1868,8 +1943,8 @@ export default function App({ publicBooking }: { publicBooking?: PublicBookingRo
               {showPassword ? 'Hide password' : 'Show password'}
             </button>
             <p id="admin-password-help" className="muted">
-              Use the admin password supplied by your workspace owner. No account registration is
-              needed.
+              Use your account email and password. For initial setup, leave email blank and use the
+              shared admin password.
             </p>
             {error && (
               <p className="field-error" role="alert">

@@ -13,6 +13,14 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
       data: { kind: 'cinema', name: `Public cinema ${Date.now()}` },
     })
   ).json();
+  venue.layout.pricing = { mode: 'uniform', currency: 'EUR', amount: 1000 };
+  expect(
+    (
+      await request.put(`/api/venues/${venue.id}`, {
+        data: { name: venue.name, layout: venue.layout, revision: venue.revision },
+      })
+    ).status(),
+  ).toBe(200);
   const show = await (
     await request.post(`/api/venues/${venue.id}/shows`, {
       data: {
@@ -22,6 +30,13 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
       },
     })
   ).json();
+  expect(
+    (
+      await request.put(`/api/venues/${venue.id}/shows/${show.id}/pricing`, {
+        data: { multiplier: 1.3, overrides: [] },
+      })
+    ).status(),
+  ).toBe(200);
   await page.request.post('/api/auth/login', { data: { password: 'integration-password-123' } });
   await page.setViewportSize({ width: 390, height: 844 });
   const authRequests: string[] = [];
@@ -44,8 +59,23 @@ test('public seat booking stays guest-only with an admin cookie and fits mobile'
     .selectOption(venue.layout.floors[0].resources[0].id);
   await page.getByRole('button', { name: 'Review reservation →', exact: true }).click();
   await page.getByLabel('Guest name').fill('Public guest');
+  await page.getByLabel('Email (optional)', { exact: true }).fill('public-guest@example.test');
+  await page.getByLabel('Phone (optional)', { exact: true }).fill('+49 123 456789');
   await fits();
+  const result = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/bookings') && response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Confirm reservation', exact: true }).click();
+  const booking = await (await result).json();
+  expect(booking).toMatchObject({ price: 1300, currency: 'EUR' });
+  expect(booking).not.toHaveProperty('guestEmail');
+  expect(booking).not.toHaveProperty('guestPhone');
+  const records = await (await request.get(`/api/bookings?venueId=${venue.id}`)).json();
+  expect(records.items.find((item: { id: string }) => item.id === booking.id)).toMatchObject({
+    guestEmail: 'public-guest@example.test',
+    guestPhone: '+49 123 456789',
+  });
   await expect(
     page.getByRole('heading', { name: 'Reservation confirmed', exact: true }),
   ).toBeVisible();

@@ -16,7 +16,7 @@ Spantrek. No Spantrek code, credentials, or artwork is included.
 - Fourteen editable scenery types: plants, counters, sofas, partitions, columns, doors, screens, stairs, ramps, cars, chargers, barriers, pitches and text/number labels. Position, size, height, rotation and color persist in the shared layout.
 - Template creation, venue duplication, validated JSON import/export.
 - Persistent PostgreSQL bookings with database-enforced overlap prevention.
-- Administrator sign-in, reservation list and cancellation. Guest names are private.
+- Individual owner, manager and staff accounts, private reservation details, check-in and cancellation.
 - Responsive interface, keyboard-selectable 2D resources, 3D resource dropdown, and consistent decorative SVG icons with accessible control names.
 
 ## Booking and management
@@ -136,7 +136,7 @@ docker compose up --build
 ```
 
 Open **http://localhost:3188**. Three sample venues are seeded on first start.
-Use **Admin sign in** with the password from `.env` to edit layouts and add venues.
+On first setup, use **Admin sign in**, leave Email blank, and enter the password from `.env`. Create your first owner account from the Overview prompt. After that, sign in with your account email and password.
 Public visitors can view layouts and book without an account.
 
 Data survives restarts in `postgres_data`. `docker compose down -v` deletes it.
@@ -307,3 +307,23 @@ In production, `PUBLIC_ORIGIN` supplies the canonical HTTPS origin for shared li
 and instances without a configured origin use the browser's current origin. Only `/book/<id>` documents permit
 HTTP(S) frame ancestors and omit `X-Frame-Options`; workspace pages and API responses retain
 same-origin framing protection. This does not relax the API's cross-origin mutation checks.
+
+## Staff accounts and audit records
+
+Existing installations keep shared-password access until the first owner is created. Creating
+that owner upgrades the current session and ends shared-password access, including other old
+sessions. Owners manage accounts in Team; initial passwords are at least 12 characters and must
+be shared privately. Account email invitations and password-reset delivery are not included.
+
+Owners have full access. Managers manage venues, layouts, pricing, events and reservations.
+Staff land directly in Reservations and can read details, export filtered records, and check in
+or undo check-in. Staff cannot edit notes, cancel, mark no-show, change prices or manage venues.
+Their venue/event filter choices use public active venues and upcoming events; historical
+reservations remain searchable and readable. Every protected API checks permissions independently
+of the interface. Disabling or changing an account's role affects existing sessions immediately;
+at least one active owner must remain.
+
+Passwords use asynchronous salted scrypt; session tokens are stored as hashes. Migration 009
+adds accounts, session ownership and an audit log. Layout saves, price changes and cancellations
+record the acting user in the same transaction; a failed audit write rolls back the action.
+Bootstrap actions have a null user ID. Disabling accounts retains their audit attribution.

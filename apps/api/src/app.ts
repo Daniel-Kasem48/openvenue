@@ -31,7 +31,7 @@ import {
 import { adminBookingSelect, bookingColumns, bookingsCsv, queryBookings } from './reservations';
 import { overview } from './overview';
 import { initialize, syncResources, transaction } from './database';
-import { authentication, tokenHash } from './auth';
+import { authentication, tokenHash, type Principal } from './auth';
 import { audit, registerAccounts } from './accounts';
 import { generateScene, SceneGenerationError } from './scene-generation';
 
@@ -298,7 +298,7 @@ export async function createApp(config: {
             f.resources.map((r) => ({
               id: r.id,
               price: r.price,
-              tierId: 'tierId' in r ? r.tierId : undefined,
+              tierId: r.tierId,
             })),
           ),
         });
@@ -425,6 +425,7 @@ export async function createApp(config: {
           override.tierId,
           override.amount,
         ]);
+      await audit(client, res.locals.principal, 'pricing.changed', 'show', showId);
     });
     res.json(pricing);
   });
@@ -716,17 +717,21 @@ export async function createApp(config: {
     const { from, to } = overviewRangeSchema.parse(req.query);
     res.json(await overview(pool, from, to));
   });
-  router.get('/bookings', guard, async (req, res) => {
+  router.get('/bookings', readGuard, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json(await queryBookings(pool, bookingFiltersSchema.parse(req.query), true));
   });
-  router.get('/bookings.csv', guard, async (req, res) => {
+  router.get('/bookings.csv', readGuard, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const rows = await queryBookings(pool, bookingFiltersSchema.parse(req.query), false);
     res.setHeader('Content-Disposition', 'attachment; filename="reservations.csv"');
     res.type('text/csv; charset=utf-8').send(bookingsCsv(rows.items));
   });
-  async function patchBooking(id: string, body: z.infer<typeof bookingPatchSchema>) {
+  async function patchBooking(
+    id: string,
+    body: z.infer<typeof bookingPatchSchema>,
+    principal: Principal,
+  ) {
     return transaction(pool, async (client) => {
       const found = (await client.query('SELECT venue_id FROM bookings WHERE id=$1', [id])).rows[0];
       if (!found) fail(404, 'Reservation not found');
@@ -745,14 +750,24 @@ export async function createApp(config: {
         WHERE id=$1`,
         [id, body.notes ?? null, body.status ?? null, body.checkedIn ?? null],
       );
+      if (booking.status === 'confirmed' && body.status === 'cancelled')
+        await audit(client, principal, 'booking.cancelled', 'booking', id);
       return (await client.query(adminBookingSelect + ' WHERE b.id=$1', [id])).rows[0];
     });
   }
-  router.patch('/bookings/:id', guard, async (req, res) => {
-    res.json(await patchBooking(z.uuid().parse(req.params.id), bookingPatchSchema.parse(req.body)));
+  router.patch('/bookings/:id', readGuard, async (req, res) => {
+    const body = bookingPatchSchema.parse(req.body);
+    const principal = res.locals.principal as Principal;
+    if (principal.role === 'staff' && (body.notes !== undefined || body.status !== undefined))
+      fail(403, 'Staff can only check reservations in or undo check-in.');
+    res.json(await patchBooking(z.uuid().parse(req.params.id), body, principal));
   });
   router.delete('/bookings/:id', guard, async (req, res) => {
-    await patchBooking(z.uuid().parse(req.params.id), { status: 'cancelled' });
+    await patchBooking(
+      z.uuid().parse(req.params.id),
+      { status: 'cancelled' },
+      res.locals.principal,
+    );
     res.json({ cancelled: true });
   });
   app.use('/api', router);

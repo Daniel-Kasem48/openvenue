@@ -3,7 +3,7 @@ import {
   formatPrice,
   type AdminBooking,
   type BookingPage,
-  type ManagedEvent,
+  type Show,
   type Venue,
 } from '@openvenue/contracts';
 import { api, json } from './api';
@@ -19,14 +19,16 @@ const statusName = (booking: AdminBooking) =>
       : 'Cancelled';
 const cell = 'border-t border-stone-100 px-4 py-3 align-top';
 export function Reservations({
+  staff = false,
   onMessage,
   onChange,
 }: {
+  staff?: boolean;
   onMessage: (message: string) => void;
   onChange: () => void;
 }) {
   const [venues, setVenues] = useState<Venue[]>([]),
-    [events, setEvents] = useState<ManagedEvent[]>([]);
+    [events, setEvents] = useState<Show[]>([]);
   const [filters, setFilters] = useState({
     venueId: '',
     showId: '',
@@ -46,24 +48,26 @@ export function Reservations({
     [notes, setNotes] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    api<Venue[]>('/venues?includeArchived=1', { signal: controller.signal })
+    api<Venue[]>(staff ? '/venues' : '/venues?includeArchived=1', { signal: controller.signal })
       .then(setVenues)
       .catch((e) => {
         if (e.name !== 'AbortError') setError(e.message);
       });
     return () => controller.abort();
-  }, []);
+  }, [staff]);
   useEffect(() => {
     const controller = new AbortController();
     setEvents([]);
     if (filters.venueId)
-      api<ManagedEvent[]>(`/venues/${filters.venueId}/events`, { signal: controller.signal })
+      api<Show[]>(`/venues/${filters.venueId}/${staff ? 'shows' : 'events'}`, {
+        signal: controller.signal,
+      })
         .then(setEvents)
         .catch((e) => {
           if (e.name !== 'AbortError') setError(e.message);
         });
     return () => controller.abort();
-  }, [filters.venueId]);
+  }, [filters.venueId, staff]);
   const parameters = new URLSearchParams({ status: filters.status, q: filters.q.trim() });
   if (filters.venueId) parameters.set('venueId', filters.venueId);
   if (filters.showId) parameters.set('showId', filters.showId);
@@ -256,7 +260,7 @@ export function Reservations({
                     <span className="pill">{statusName(booking)}</span>
                   </td>
                   <td className={cell}>
-                    {booking.status === 'confirmed' && (
+                    {!staff && booking.status === 'confirmed' && (
                       <button
                         className="text-button danger"
                         aria-label="Cancel reservation"
@@ -321,19 +325,22 @@ export function Reservations({
             <label>
               Staff notes
               <textarea
+                readOnly={staff}
                 maxLength={4000}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 disabled={busy}
               />
             </label>
-            <button
-              className="secondary"
-              disabled={busy || notes === selected.notes}
-              onClick={() => void update(selected, { notes })}
-            >
-              Save notes
-            </button>
+            {!staff && (
+              <button
+                className="secondary"
+                disabled={busy || notes === selected.notes}
+                onClick={() => void update(selected, { notes })}
+              >
+                Save notes
+              </button>
+            )}
             {selected.status === 'confirmed' && (
               <div className="flex flex-wrap gap-2">
                 <button
@@ -343,21 +350,25 @@ export function Reservations({
                 >
                   {selected.checkedInAt ? 'Undo check-in' : 'Check in'}
                 </button>
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => void update(selected, { status: 'no_show' })}
-                >
-                  Mark no-show
-                </button>
-                <button
-                  className="danger"
-                  aria-label="Cancel reservation"
-                  disabled={busy}
-                  onClick={() => void update(selected, { status: 'cancelled' })}
-                >
-                  Cancel
-                </button>
+                {!staff && (
+                  <>
+                    <button
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => void update(selected, { status: 'no_show' })}
+                    >
+                      Mark no-show
+                    </button>
+                    <button
+                      className="danger"
+                      aria-label="Cancel reservation"
+                      disabled={busy}
+                      onClick={() => void update(selected, { status: 'cancelled' })}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {error && <p role="alert">{error}</p>}

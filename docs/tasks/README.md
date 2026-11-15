@@ -37,7 +37,7 @@ Work tasks **in order** unless a task says otherwise. One task = one branch = on
 - 3D: three.js via React Three Fiber + drei (`Map3D.tsx`, `scene/*`). 2D: SVG (`Map2D.tsx`).
 - API: Express router inside NestJS bootstrap, `apps/api/src/app.ts`. Postgres, raw SQL.
 - Migrations: `apps/api/migrations/NNN_name.sql`, applied in order, idempotent
-  (`IF NOT EXISTS`). Next free number is **005**.
+  (`IF NOT EXISTS`). Next free number is **010**.
 - Shared types and zod schemas: `packages/contracts/src/index.ts`. Any API or layout JSON change
   goes through these schemas first.
 - Prices are stored as **integer minor units** (cents). Currencies: USD, EUR, GBP, AED, SAR, SYP.
@@ -65,3 +65,11 @@ Work tasks **in order** unless a task says otherwise. One task = one branch = on
 6. Accessibility: every control keeps a visible label or `aria-label`; keep focus-visible outlines.
 7. No new runtime dependency without a one-line justification in the PR description.
 8. Update `README.md` when a user-visible feature is added.
+
+## Local integration status (2026-11-15)
+
+Tasks 00–14 are implemented locally. Final integrated validation: 101 unit/API tests and
+41 browser tests passed, with typecheck, production build and formatting checks passing.
+Task 05 still needs the physical integrated-GPU performance check; the available browser uses
+software rendering. Task 15 awaits the owner decisions listed in its specification.
+GitHub publication has not been performed.

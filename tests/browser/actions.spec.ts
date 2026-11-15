@@ -7,7 +7,14 @@ test('venue action menu supports keyboard, outside click and dirty save state', 
   await page.getByRole('button', { name: 'Admin sign in', exact: true }).click();
   await page.getByLabel('Password', { exact: true }).fill('integration-password-123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.locator('.venue-list button').first().click();
+  const name = `Action menu ${Date.now()}`;
+  const created = await page.request.post('/api/venues', { data: { name, kind: 'restaurant' } });
+  expect(created.status()).toBe(201);
+  await page.reload();
+  await page
+    .locator('.venue-list')
+    .getByRole('button', { name: new RegExp(name) })
+    .click();
   const trigger = page.getByRole('button', { name: 'More venue actions' });
   await trigger.click();
   await expect(page.getByRole('menu')).toBeVisible();

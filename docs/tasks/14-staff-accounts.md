@@ -22,5 +22,16 @@ staff (e.g. door staff checking guests in).
 
 ## Acceptance
 
-- [ ] API tests: each role against each guarded route (allowed / 403).
-- [ ] Existing single-password installs keep working after upgrade.
+- [x] API tests: each role against each guarded route (allowed / 403).
+- [x] Existing single-password installs keep working after upgrade.
+
+## Implementation
+
+Migration 009 adds users, session ownership and audit records. Bootstrap owner creation and
+last-owner changes are serialized. Owner creation converts only the requesting legacy session;
+other shared-password sessions stop working. API role checks use the current account on every
+request. Staff receive a reservation-only screen with check-in/undo and read/export access.
+
+Regression tests cover concurrent bootstrap, concurrent last-owner removal attempts, each role's
+route access, disabled/demoted sessions, staff field permissions, audit attribution, and rollback
+when an audit insert fails. Browser verification covers owner setup, staff creation and check-in.

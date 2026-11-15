@@ -160,6 +160,8 @@ describe.skipIf(!databaseUrl)('Staff accounts and authorization', () => {
       [`/venues/${id}/shows/${id}/blocks`, 'GET'],
       [`/venues/${id}/shows/${id}/blocks`, 'POST', {}],
       [`/venues/${id}/shows/${id}/blocks`, 'DELETE', {}],
+      [`/venues/${id}/shows/${id}/pricing`, 'GET'],
+      [`/venues/${id}/shows/${id}/pricing`, 'PUT', {}],
       ['/overview', 'GET'],
       [`/bookings/${id}`, 'DELETE'],
     ];
@@ -173,8 +175,14 @@ describe.skipIf(!databaseUrl)('Staff accounts and authorization', () => {
       for (const role of ['owner', 'manager'])
         expect([401, 403]).not.toContain((await request(path, method, body, role)).status);
     }
-    for (const role of ['owner', 'manager', 'staff'])
-      expect((await request('/bookings', 'GET', undefined, role)).status).toBe(200);
+    for (const path of ['/bookings', '/bookings.csv', '/auth/me']) {
+      expect((await request(path, 'GET', undefined, 'guest')).status).toBe(401);
+      for (const role of ['owner', 'manager', 'staff'])
+        expect((await request(path, 'GET', undefined, role)).status).toBe(200);
+    }
+    expect((await request(`/bookings/${id}`, 'PATCH', { checkedIn: true }, 'guest')).status).toBe(
+      401,
+    );
     for (const role of ['manager', 'staff'])
       for (const [path, method, body] of [
         ['/users', 'GET'],
@@ -255,6 +263,129 @@ describe.skipIf(!databaseUrl)('Staff accounts and authorization', () => {
     expect(
       (await pool.query('SELECT user_id,action FROM audit_log WHERE entity_id=$1', [show.id])).rows,
     ).toEqual([{ user_id: users.manager.id, action: 'event.cancelled' }]);
+  });
+  it('allows staff check-in only and audits booking cancellation once with its actor', async () => {
+    const venue = await (
+      await request('/venues', 'POST', { kind: 'parking', name: 'Door permissions' })
+    ).json();
+    const booked = await request(
+      '/bookings',
+      'POST',
+      {
+        venueId: venue.id,
+        resourceId: venue.layout.floors[0].resources[0].id,
+        start: '2188-01-01T12:00:00Z',
+        end: '2188-01-01T14:00:00Z',
+        guestName: 'Private guest',
+        guestEmail: 'private@example.test',
+      },
+      'guest',
+    );
+    expect(booked.status).toBe(201);
+    const booking = await booked.json();
+    const path = `/bookings/${booking.id}`;
+    for (const body of [
+      { notes: 'Denied' },
+      { status: 'no_show' },
+      { status: 'cancelled' },
+      { checkedIn: true, notes: 'Denied' },
+      { checkedIn: false, status: 'cancelled' },
+    ])
+      expect((await request(path, 'PATCH', body, 'staff')).status).toBe(403);
+    for (const checkedIn of [true, false]) {
+      const response = await request(path, 'PATCH', { checkedIn }, 'staff');
+      expect(response.status).toBe(200);
+      const row = await response.json();
+      expect(Boolean(row.checkedInAt)).toBe(checkedIn);
+      expect(row.status).toBe('confirmed');
+    }
+    expect((await request(path, 'PATCH', { checkedIn: 'true' }, 'staff')).status).toBe(400);
+    expect((await request(path, 'DELETE', undefined, 'staff')).status).toBe(403);
+    expect((await request(path, 'PATCH', { notes: 'Manager note' }, 'manager')).status).toBe(200);
+    for (const role of ['owner', 'manager', 'staff']) {
+      const csv = await request(`/bookings.csv?venueId=${venue.id}`, 'GET', undefined, role);
+      expect(csv.status).toBe(200);
+      expect(await csv.text()).toContain('private@example.test');
+    }
+    const availability = await request(
+      `/venues/${venue.id}/availability?start=2188-01-01T12:00:00Z&end=2188-01-01T14:00:00Z`,
+      'GET',
+      undefined,
+      'guest',
+    );
+    expect(availability.status).toBe(200);
+    expect(await availability.text()).not.toContain('private@example.test');
+    expect((await request(path, 'PATCH', { status: 'cancelled' }, 'manager')).status).toBe(200);
+    expect((await request(path, 'DELETE')).status).toBe(200);
+    expect((await request(path, 'PATCH', { status: 'no_show' })).status).toBe(409);
+    expect(
+      (
+        await pool.query('SELECT user_id,action,entity FROM audit_log WHERE entity_id=$1', [
+          booking.id,
+        ])
+      ).rows,
+    ).toEqual([{ user_id: users.manager.id, action: 'booking.cancelled', entity: 'booking' }]);
+  });
+  it('rolls back booking and event pricing changes when their audit insert fails', async () => {
+    const venue = await (
+      await request('/venues', 'POST', { kind: 'cinema', name: 'Atomic audit' })
+    ).json();
+    const show = await (
+      await request(`/venues/${venue.id}/shows`, 'POST', {
+        title: 'Atomic show',
+        start: '2188-02-01T12:00:00Z',
+        end: '2188-02-01T14:00:00Z',
+      })
+    ).json();
+    const booking = await (
+      await request(
+        '/bookings',
+        'POST',
+        {
+          venueId: venue.id,
+          showId: show.id,
+          resourceId: venue.layout.floors[0].resources[0].id,
+          guestName: 'Atomic guest',
+        },
+        'guest',
+      )
+    ).json();
+    const pricingPath = `/venues/${venue.id}/shows/${show.id}/pricing`;
+    const pricing = { multiplier: 1.5, overrides: [] };
+    expect((await request(pricingPath, 'PUT', pricing, 'manager')).status).toBe(200);
+    expect(
+      (
+        await pool.query('SELECT user_id,action,entity FROM audit_log WHERE entity_id=$1', [
+          show.id,
+        ])
+      ).rows,
+    ).toEqual([{ user_id: users.manager.id, action: 'pricing.changed', entity: 'show' }]);
+    // Force a database audit failure to verify both writes share the mutation transaction.
+    await pool.query(
+      `ALTER TABLE audit_log ADD CONSTRAINT test_reject_audit CHECK (entity_id NOT IN ('${booking.id}', '${show.id}')) NOT VALID`,
+    );
+    try {
+      expect(
+        (await request(pricingPath, 'PUT', { multiplier: 2, overrides: [] }, 'manager')).status,
+      ).toBe(500);
+      expect(await (await request(pricingPath)).json()).toEqual(pricing);
+      expect(
+        (await request(`/bookings/${booking.id}`, 'DELETE', undefined, 'manager')).status,
+      ).toBe(500);
+      expect(
+        (await pool.query('SELECT status FROM bookings WHERE id=$1', [booking.id])).rows[0].status,
+      ).toBe('confirmed');
+      expect(
+        (
+          await pool.query(
+            'SELECT count(*)::int AS n FROM audit_log WHERE entity_id=ANY($1::uuid[])',
+            [[booking.id, show.id]],
+          )
+        ).rows[0].n,
+      ).toBe(1);
+    } finally {
+      await pool.query('ALTER TABLE audit_log DROP CONSTRAINT test_reject_audit');
+    }
   });
   it('applies changed roles and disabled accounts to existing sessions immediately', async () => {
     expect((await request(`/users/${users.staff.id}`, 'PATCH', { role: 'manager' })).status).toBe(
