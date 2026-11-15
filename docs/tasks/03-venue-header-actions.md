@@ -27,5 +27,5 @@ One clear primary action per mode, the rest grouped.
 
 ## Acceptance
 
-- [ ] Keyboard: Tab to `…`, Enter opens, arrows move, Enter activates, Esc closes and returns focus.
-- [ ] All checks in the README pass.
+- [x] Keyboard: Tab to `…`, Enter opens, arrows move, Enter activates, Esc closes and returns focus.
+- [x] All checks in the README pass.

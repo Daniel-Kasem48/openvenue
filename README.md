@@ -190,3 +190,7 @@ truncated, refused, or off-floor output is rejected without changing saved data.
 Generated geometry is a starting point, not an accessibility or building-code assessment.
 
 Provider reference: [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+
+Venue actions: Edit layout is the main action in view mode; Duplicate and Generate with Claude
+are in the keyboard-accessible More venue actions menu. While editing, Save layout is enabled
+only after changes, with an unsaved indicator beside the venue name.

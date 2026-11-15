@@ -1,3 +1,4 @@
+import { Menu } from './Menu';
 import {
   UtensilsCrossed,
   SquareParking,
@@ -8,7 +9,6 @@ import {
   CalendarCheck,
   ArrowUpRight,
   Check,
-  Sparkles,
   Map,
   Box,
   MapPin,
@@ -1083,7 +1083,18 @@ export default function App() {
                     {types[current.kind].icon}
                   </span>
                   <div>
-                    <h2 className="max-sm:text-base">{current.name}</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="max-sm:text-base">{current.name}</h2>
+                      {dirty && (
+                        <span className="pill">
+                          <span
+                            aria-hidden="true"
+                            className="mr-1 inline-block size-1.5 rounded-full bg-amber-500"
+                          />
+                          Unsaved changes
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 text-xs text-stone-500">
                       {types[current.kind].name} <span className="mx-1 text-stone-300">·</span>{' '}
                       {current.layout.floors.length}{' '}
@@ -1105,22 +1116,15 @@ export default function App() {
                   )}
                   {admin && (
                     <>
-                      <button
-                        className="text-button max-lg:hidden"
-                        onClick={() => openCreate(current)}
-                      >
-                        Duplicate
-                      </button>
-                      <button className="secondary" onClick={() => setModal('generate')}>
-                        <span className="text-forest-500" aria-hidden="true">
-                          <Sparkles
-                            className="size-4 inline-block shrink-0"
-                            aria-hidden="true"
-                            strokeWidth={1.75}
-                          />
-                        </span>{' '}
-                        Generate with Claude
-                      </button>
+                      {!editing && (
+                        <Menu
+                          label="More venue actions"
+                          items={[
+                            { label: 'Duplicate', onSelect: () => openCreate(current) },
+                            { label: 'Generate with Claude', onSelect: () => setModal('generate') },
+                          ]}
+                        />
+                      )}
                       {editing ? (
                         <>
                           <button
@@ -1140,7 +1144,7 @@ export default function App() {
                         </>
                       ) : (
                         <button
-                          className="secondary"
+                          className="primary"
                           onClick={() => {
                             setDraft(structuredClone(venue!));
                             setEditing(true);
@@ -1291,7 +1295,7 @@ export default function App() {
                     <span className="max-sm:hidden">
                       {editing
                         ? dirty
-                          ? 'Unsaved changes'
+                          ? 'Save to publish edits'
                           : 'Layout is up to date'
                         : 'Availability refreshes every 15 seconds'}
                     </span>

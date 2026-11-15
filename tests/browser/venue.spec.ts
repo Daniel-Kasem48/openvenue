@@ -763,7 +763,8 @@ test('generated scenes are previewed before applying and saved only on explicit 
   const venue = (await (await page.request.get('/api/venues')).json()).find(
     (v: any) => v.name === name,
   );
-  await page.getByRole('button', { name: 'Generate with Claude' }).click();
+  await page.getByRole('button', { name: 'More venue actions' }).click();
+  await page.getByRole('menuitem', { name: 'Generate with Claude' }).click();
   await page.getByRole('button', { name: 'Use example description' }).click();
   await page.getByRole('button', { name: 'Generate preview', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('ANTHROPIC_API_KEY');
@@ -773,7 +774,8 @@ test('generated scenes are previewed before applying and saved only on explicit 
   await page.route('**/api/venues/*/generate-scene', (route) =>
     route.fulfill({ json: { summary: 'A dining room with clear aisles.', layout: generated } }),
   );
-  await page.getByRole('button', { name: 'Generate with Claude' }).click();
+  await page.getByRole('button', { name: 'More venue actions' }).click();
+  await page.getByRole('menuitem', { name: 'Generate with Claude' }).click();
   await page
     .getByLabel('Describe your scene')
     .fill('A restaurant with twelve tables and a counter');
