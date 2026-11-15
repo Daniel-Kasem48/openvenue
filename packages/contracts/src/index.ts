@@ -141,6 +141,7 @@ export type Booking = {
   venueName?: string;
   resourceLabel?: string;
   seatLocation?: string;
+  eventTitle?: string | null;
 };
 export const createVenueSchema = z.object({
   name,
@@ -161,6 +162,9 @@ export const intervalSchema = z
       Date.parse(v.end) - Date.parse(v.start) <= 7 * 86400000,
     { message: 'Choose a positive interval of at most seven days' },
   );
+export const eventSchema = intervalSchema.safeExtend({ title: z.string().trim().min(1).max(100) });
+export type ManagedEvent = Show & { sold: number; capacity: number; blocked: number };
+
 export const bookingSchema = z.object({
   venueId: uuid,
   resourceId: uuid,

@@ -57,6 +57,28 @@ In **Edit layout → Reservation pricing**, choose free, one standard price, or 
 
 Restaurant guests choose party size and a table with enough capacity. Cinema/stadium guests choose a seat count and toggle that many seats. If any seat conflicts, the entire checkout rolls back. Each seat can subsequently be cancelled individually by the administrator.
 
+## Event management
+
+Cinema and stadium venue panels have **Map** and **Events** tabs. Events lists upcoming and
+past events with confirmed seats sold, available capacity and blocked seats. Add or edit an
+event using the shared form; event dates are independent of the guest booking date draft.
+Use **Manage seats** to open the chosen event's blocks and reservations on the map.
+
+Rescheduling moves the event and every confirmed reservation together. If any moved seat
+would overlap another reservation, the entire change is rejected. Cancelled reservations retain
+their original dates. Title-only edits are allowed for started events; a changed schedule must
+start in the future and last at most seven days.
+
+**Delete** is available only without confirmed reservations. **Cancel event** is a separate,
+explicit action that confirms how many reservations will be cancelled, then removes the event
+and its blocks. Both actions retain all reservation records, prices, seat locations and dates.
+Each seat booking snapshots its event title; existing bookings are backfilled during upgrade.
+Deleting an event detaches the event link without deleting history. Renaming an event does not
+rewrite the title originally booked. Cancellation does not issue refunds or send notifications.
+
+Event creation, edits, deletion and cancellation share the venue transaction lock with checkout
+and blocking. The operator event list is admin-only; the public show list remains upcoming only.
+
 ## Seat rows and event blocks
 
 Stadium seats have explicit row letters and seat numbers. Row A starts nearest the pitch in the template; tickets and booking summaries identify the block, row and seat. Existing layouts retain their labels and derive row/seat information from names such as `North A1`. New confirmed reservations save the seat location as well as its price, so later layout edits do not rewrite those details.
@@ -224,3 +246,6 @@ booking and management buttons retain their existing labels. The venue listing i
 The sidebar groups venues by kind and shows name/kind search when more than six venues exist.
 Long names keep their full accessible name and tooltip; selecting a venue clears the search and
 brings that venue into view.
+
+Guest checkout checks the event dates reviewed in the browser. If an operator reschedules the
+event before confirmation, the guest sees the updated schedule and must confirm again.

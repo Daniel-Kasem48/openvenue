@@ -76,7 +76,7 @@ describe.skipIf(!databaseUrl)('Operator overview', () => {
         [venue],
       );
       await pool.query(
-        "INSERT INTO shows VALUES($1,$2,'Overview event','2181-01-02T12:00Z','2181-01-02T14:00Z')",
+        "INSERT INTO shows(id,venue_id,title,starts_at,ends_at) VALUES($1,$2,'Overview event','2181-01-02T12:00Z','2181-01-02T14:00Z')",
         [show, venue],
       );
       for (let i = 0; i < 5; i++) {

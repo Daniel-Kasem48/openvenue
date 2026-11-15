@@ -15,6 +15,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { Events } from './Events';
 import { Overview } from './Overview';
 import { EventSeatControls } from './EventSeatControls';
 import { Modal } from './Modal';
@@ -32,6 +33,7 @@ import {
   intervalSchema,
   layoutSchema,
   type Booking,
+  type ManagedEvent,
   type Layout,
   type Resource,
   type Show,
@@ -114,6 +116,11 @@ export default function App() {
   const [shows, setShows] = useState<Show[]>([]),
     [showId, setShowId] = useState(''),
     [showTitle, setShowTitle] = useState('');
+  const [venueTab, setVenueTab] = useState<'map' | 'events'>('map');
+  const [eventsRevision, setEventsRevision] = useState(0);
+  const [editingShow, setEditingShow] = useState<Show | null>(null);
+  const [showStart, setShowStart] = useState('');
+  const [showEnd, setShowEnd] = useState('');
   const [overviewEvent, setOverviewEvent] = useState('');
   useEffect(() => {
     if (overviewEvent && shows.some((show) => show.id === overviewEvent)) {
@@ -311,6 +318,7 @@ export default function App() {
   }, [dirty]);
   const chooseVenue = (id: string) => {
     if (dirty && !confirm('Discard unsaved layout changes?')) return;
+    setVenueTab('map');
     setPartySize(1);
     setSelectedSeats([]);
     setStep(admin ? 'place' : 'time');
@@ -325,6 +333,30 @@ export default function App() {
     setMessage('');
     setError('');
   };
+  const openShow = (show?: Show) => {
+    setEditingShow(show ?? null);
+    setShowTitle(show?.title ?? '');
+    setShowStart(localTime(show ? new Date(show.start) : new Date(Date.now() + 3600000)));
+    setShowEnd(localTime(show ? new Date(show.end) : new Date(Date.now() + 7200000)));
+    setError('');
+    setModal('show');
+  };
+  const removeEvent = (event: ManagedEvent, cancel: boolean) =>
+    void run(async () => {
+      await api(`/venues/${venueId}/shows/${event.id}${cancel ? '/cancel' : ''}`, {
+        method: cancel ? 'POST' : 'DELETE',
+      });
+      setShows((items) => items.filter((show) => show.id !== event.id));
+      if (showId === event.id) setShowId('');
+      setEventsRevision((n) => n + 1);
+      setRefresh((n) => n + 1);
+      await load();
+      setMessage(
+        cancel
+          ? 'Event cancelled. Reservation history kept.'
+          : 'Event deleted. Reservation history kept.',
+      );
+    });
   const updateLayout = (layout: Layout) => {
     if (!draft) return;
     setDraft({ ...draft, layout });
@@ -414,9 +446,11 @@ export default function App() {
           expectedTotal: total,
           expectedCurrency: currency,
           guestName: guest,
-          ...(seatVenue ? { showId } : interval),
+          ...interval,
+          ...(seatVenue ? { showId } : {}),
         }),
       ).catch(async (error) => {
+        if (seatVenue) setShows(await api<Show[]>(`/venues/${venueId}/shows`));
         await load();
         setRefresh((v) => v + 1);
         throw error;
@@ -528,13 +562,7 @@ export default function App() {
             <p className="muted">No upcoming shows. An administrator can add one.</p>
           )}
           {admin && (
-            <button
-              className="text-button"
-              onClick={() => {
-                setShowTitle('');
-                setModal('show');
-              }}
-            >
+            <button className="text-button" onClick={() => openShow()}>
               + {venue?.kind === 'stadium' ? 'Add event' : 'Add showtime'}
             </button>
           )}
@@ -586,6 +614,25 @@ export default function App() {
     setConfirmation(null);
     setMessage('');
   };
+  const venueTabs = admin && seatVenue && !editing && (
+    <div
+      role="tablist"
+      aria-label="Venue view"
+      className="flex gap-2 border-y border-stone-100 px-6 py-3"
+    >
+      {(['map', 'events'] as const).map((item) => (
+        <button
+          key={item}
+          role="tab"
+          aria-selected={venueTab === item}
+          className={venueTab === item ? 'primary' : 'secondary'}
+          onClick={() => setVenueTab(item)}
+        >
+          {item === 'map' ? 'Map' : 'Events'}
+        </button>
+      ))}
+    </div>
+  );
   const isReview = !admin && step === 'review';
   const stepOrder = ['venues', 'time', 'place', 'review'] as const;
   const stepIndex = stepOrder.indexOf(step as (typeof stepOrder)[number]);
@@ -1157,6 +1204,25 @@ export default function App() {
                 ? 'No venues found. Sign in to create your first venue.'
                 : 'Opening your workspace…'}
             </div>
+          ) : admin && seatVenue && venueTab === 'events' && !editing ? (
+            <section className="panel venue-panel">
+              <h2 className="px-6 py-5">{current.name}</h2>
+              {venueTabs}
+              <Events
+                venueId={venueId}
+                stadium={current.kind === 'stadium'}
+                revision={eventsRevision}
+                onAdd={() => openShow()}
+                onEdit={openShow}
+                onRemove={removeEvent}
+                onManage={(event) => {
+                  setShows((items) => [...items.filter((show) => show.id !== event.id), event]);
+                  setShowId(event.id);
+                  setManagingSeats(true);
+                  setVenueTab('map');
+                }}
+              />
+            </section>
           ) : (
             <section
               className={`panel venue-panel ${admin ? 'operator-venue' : ''} ${editing ? 'layout-editor overflow-clip' : ''}`}
@@ -1246,6 +1312,7 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {venueTabs}
               {!admin && (
                 <div className="visit-summary flex flex-wrap items-center gap-3 border-t border-stone-100 bg-forest-50/50 px-6 py-3 text-[13px] text-stone-700 max-sm:px-4">
                   <button className="text-button -ml-2" onClick={() => setStep('time')}>
@@ -1804,25 +1871,50 @@ export default function App() {
         </Modal>
       )}
       {modal === 'show' && (
-        <Modal title="Add a showtime" onClose={() => setModal(null)}>
+        <Modal
+          title={
+            editingShow
+              ? venue?.kind === 'stadium'
+                ? 'Edit event'
+                : 'Edit showtime'
+              : venue?.kind === 'stadium'
+                ? 'Add event'
+                : 'Add a showtime'
+          }
+          onClose={() => setModal(null)}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                if (!interval) throw new Error('Choose a valid time interval');
                 const show = await api<Show>(
-                  `/venues/${venueId}/shows`,
-                  json({
-                    title: showTitle,
-                    start: new Date(start).toISOString(),
-                    end: new Date(end).toISOString(),
-                  }),
+                  `/venues/${venueId}/shows${editingShow ? `/${editingShow.id}` : ''}`,
+                  json(
+                    {
+                      title: showTitle,
+                      start:
+                        editingShow && showStart === localTime(new Date(editingShow.start))
+                          ? editingShow.start
+                          : new Date(showStart).toISOString(),
+                      end:
+                        editingShow && showEnd === localTime(new Date(editingShow.end))
+                          ? editingShow.end
+                          : new Date(showEnd).toISOString(),
+                    },
+                    editingShow ? 'PUT' : 'POST',
+                  ),
                 );
-                setShows((s) => [...s, show]);
-                setShowId(show.id);
+                setShows((items) =>
+                  [...items.filter((item) => item.id !== show.id), show]
+                    .filter((item) => Date.parse(item.end) > Date.now())
+                    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start)),
+                );
+                if (Date.parse(show.end) > Date.now()) setShowId(show.id);
+                setEventsRevision((n) => n + 1);
+                setRefresh((n) => n + 1);
                 setModal(null);
                 await load();
-                setMessage('Showtime added.');
+                setMessage(editingShow ? 'Event updated.' : 'Showtime added.');
               });
             }}
           >
@@ -1839,8 +1931,8 @@ export default function App() {
               Starts
               <input
                 type="datetime-local"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
+                value={showStart}
+                onChange={(e) => setShowStart(e.target.value)}
                 required
               />
             </label>
@@ -1848,14 +1940,18 @@ export default function App() {
               Ends
               <input
                 type="datetime-local"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                value={showEnd}
+                onChange={(e) => setShowEnd(e.target.value)}
                 required
               />
             </label>
             {error && <p className="field-error">{error}</p>}
             <button className="primary full" disabled={working}>
-              Add showtime
+              {editingShow
+                ? 'Save changes'
+                : venue?.kind === 'stadium'
+                  ? 'Add event'
+                  : 'Add showtime'}
             </button>
           </form>
         </Modal>

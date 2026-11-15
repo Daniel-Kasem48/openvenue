@@ -24,5 +24,21 @@ no delete.
 
 ## Acceptance
 
-- [ ] API tests: edit, reschedule with bookings, delete blocked by bookings, cancel-all.
-- [ ] Browser test: create → edit → delete an event.
+- [x] API tests: edit, reschedule with bookings, delete blocked by bookings, cancel-all.
+- [x] Browser test: create → edit → delete an event.
+
+## Implemented
+
+- Added guarded event listing and edit/delete/cancel routes, using shared contract validation.
+- Every event mutation locks the venue; rescheduling updates confirmed bookings transactionally.
+- Migration 005 snapshots event titles and backfills existing bookings. Removal detaches history
+  only after saving the title, and removes blocks; no reservation records are deleted.
+- Events tab shows upcoming and past entries, sales, capacity minus blocks, edit/seat controls,
+  protected deletion and explicit cancellation. Add/edit share a modal with independent dates.
+- API coverage includes auth, cross-venue isolation, overlapping reschedule rollback, multiple
+  confirmed bookings, cancellation, historical title-only edits and concurrent checkout/cancel.
+- Browser coverage includes create/edit/delete/cancel and a 390px viewport. Shared dialogs now
+  expose their visible title as an accessible name.
+
+No refunds or notifications are performed. Reservation history remains in PostgreSQL; the
+current Reservations screen still lists confirmed bookings only (expanded in task 10).

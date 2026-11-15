@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   overviewRangeSchema,
@@ -15,6 +15,7 @@ import {
   seatLocation,
   reservationPrice,
   bookingSchema,
+  eventSchema,
   cloneLayout,
   createVenueSchema,
   intervalSchema,
@@ -31,7 +32,7 @@ Module({})(RootModule);
 const fail = (status: number, message: string): never => {
   throw Object.assign(new Error(message), { status });
 };
-const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "resourceId", b.guest_name AS "guestName", b.starts_at AS start, b.ends_at AS end, b.status, b.party_size AS "partySize", b.price, b.currency, b.seat_location AS "seatLocation"`;
+const bookingColumns = `b.id, b.venue_id AS "venueId", b.resource_id AS "resourceId", b.guest_name AS "guestName", b.starts_at AS start, b.ends_at AS end, b.status, b.party_size AS "partySize", b.price, b.currency, b.seat_location AS "seatLocation", b.event_title AS "eventTitle"`;
 export async function createApp(config: {
   databaseUrl: string;
   adminPassword: string;
@@ -226,23 +227,118 @@ export async function createApp(config: {
       ).rows,
     );
   });
+  router.get('/venues/:id/events', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id);
+    res.json(
+      (
+        await pool.query(
+          `
+      SELECT s.id,s.title,s.starts_at AS start,s.ends_at AS end,
+        (SELECT count(*)::int FROM bookings b WHERE b.show_id=s.id AND b.status='confirmed') AS sold,
+        (SELECT count(*)::int FROM event_seat_blocks b WHERE b.show_id=s.id) AS blocked,
+        greatest(0,(SELECT count(*)::int FROM resources r WHERE r.venue_id=s.venue_id)
+          -(SELECT count(*)::int FROM event_seat_blocks b WHERE b.show_id=s.id)) AS capacity
+      FROM shows s WHERE s.venue_id=$1 ORDER BY (s.ends_at<=now()),s.starts_at,s.id`,
+          [venueId],
+        )
+      ).rows,
+    );
+  });
   router.post('/venues/:id/shows', guard, async (req, res) => {
-    const { title } = z.object({ title: z.string().trim().min(1).max(100) }).parse(req.body),
-      times = intervalSchema.parse(req.body);
-    if (Date.parse(times.start) <= Date.now()) fail(400, 'Show must start in the future');
-    const venue = (await pool.query('SELECT kind FROM venues WHERE id=$1', [req.params.id]))
-      .rows[0];
-    if (!venue) fail(404, 'Venue not found');
-    if (!['cinema', 'stadium'].includes(venue.kind))
-      fail(400, 'Events are only available for cinemas and stadiums');
-    const row = (
-      await pool.query(
-        'INSERT INTO shows VALUES($1,$2,$3,$4,$5) RETURNING id,title,starts_at AS start,ends_at AS end',
-        [randomUUID(), req.params.id, title, times.start, times.end],
-      )
-    ).rows[0];
+    const venueId = z.uuid().parse(req.params.id),
+      body = eventSchema.parse(req.body);
+    const row = await transaction(pool, async (client) => {
+      const venue = (
+        await client.query('SELECT kind FROM venues WHERE id=$1 FOR UPDATE', [venueId])
+      ).rows[0];
+      if (!venue) fail(404, 'Venue not found');
+      if (!['cinema', 'stadium'].includes(venue.kind))
+        fail(400, 'Events are only available for cinemas and stadiums');
+      if (Date.parse(body.start) <= Date.now()) fail(400, 'Show must start in the future');
+      return (
+        await client.query(
+          'INSERT INTO shows(id,venue_id,title,starts_at,ends_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,starts_at AS start,ends_at AS end',
+          [randomUUID(), venueId, body.title, body.start, body.end],
+        )
+      ).rows[0];
+    });
     res.status(201).json(row);
   });
+  async function lockShow(client: PoolClient, venueId: string, showId: string) {
+    await client.query('SELECT id FROM venues WHERE id=$1 FOR UPDATE', [venueId]);
+    const show = (
+      await client.query('SELECT * FROM shows WHERE id=$1 AND venue_id=$2', [showId, venueId])
+    ).rows[0];
+    if (!show) fail(404, 'Event not found');
+    return show;
+  }
+  router.put('/venues/:id/shows/:showId', guard, async (req, res) => {
+    const venueId = z.uuid().parse(req.params.id),
+      showId = z.uuid().parse(req.params.showId),
+      body = eventSchema.parse(req.body);
+    const row = await transaction(pool, async (client) => {
+      const show = await lockShow(client, venueId, showId);
+      const moved =
+        Date.parse(body.start) !== +show.starts_at || Date.parse(body.end) !== +show.ends_at;
+      if (moved && Date.parse(body.start) <= Date.now())
+        fail(400, 'Rescheduled events must start in the future');
+      if (moved)
+        await client.query(
+          "UPDATE bookings SET starts_at=$2,ends_at=$3 WHERE show_id=$1 AND status='confirmed'",
+          [showId, body.start, body.end],
+        );
+      return (
+        await client.query(
+          'UPDATE shows SET title=$2,starts_at=$3,ends_at=$4 WHERE id=$1 RETURNING id,title,starts_at AS start,ends_at AS end',
+          [showId, body.title, body.start, body.end],
+        )
+      ).rows[0];
+    }).catch((error) => {
+      if (error.code === '23P01')
+        fail(
+          409,
+          'Cannot reschedule: a booked seat overlaps another reservation. No changes were saved.',
+        );
+      throw error;
+    });
+    res.json(row);
+  });
+  const removeShow =
+    (cancel: boolean): express.RequestHandler =>
+    async (req, res) => {
+      const venueId = z.uuid().parse(req.params.id),
+        showId = z.uuid().parse(req.params.showId);
+      const affected = await transaction(pool, async (client) => {
+        const show = await lockShow(client, venueId, showId);
+        const count = (
+          await client.query(
+            "SELECT count(*)::int AS total FROM bookings WHERE show_id=$1 AND status='confirmed'",
+            [showId],
+          )
+        ).rows[0].total;
+        if (count && !cancel)
+          fail(
+            409,
+            `This event has ${count} confirmed reservations. Use Cancel event to cancel them explicitly.`,
+          );
+        if (cancel)
+          await client.query(
+            "UPDATE bookings SET status='cancelled' WHERE show_id=$1 AND status='confirmed'",
+            [showId],
+          );
+        // Keep reservation history and its title after removing the event foreign key.
+        await client.query(
+          'UPDATE bookings SET event_title=coalesce(event_title,$2),show_id=NULL WHERE show_id=$1',
+          [showId, show.title],
+        );
+        await client.query('DELETE FROM event_seat_blocks WHERE show_id=$1', [showId]);
+        await client.query('DELETE FROM shows WHERE id=$1', [showId]);
+        return count;
+      });
+      res.json({ deleted: true, cancelledBookings: affected });
+    };
+  router.delete('/venues/:id/shows/:showId', guard, removeShow(false));
+  router.post('/venues/:id/shows/:showId/cancel', guard, removeShow(true));
   const blockSeatsSchema = z.object({
     resourceIds: z
       .array(z.uuid().transform((id) => id.toLowerCase()))
@@ -344,16 +440,24 @@ export async function createApp(config: {
         ).rows[0];
         if (!venue) fail(404, 'Venue not found');
         let times;
+        let eventTitle: string | null = null;
         if (['cinema', 'stadium'].includes(venue.kind)) {
           if (!body.showId) fail(400, 'Choose a showtime');
           const show = (
-            await client.query('SELECT starts_at,ends_at FROM shows WHERE id=$1 AND venue_id=$2', [
-              body.showId,
-              body.venueId,
-            ])
+            await client.query(
+              'SELECT title,starts_at,ends_at FROM shows WHERE id=$1 AND venue_id=$2',
+              [body.showId, body.venueId],
+            )
           ).rows[0];
           if (!show) fail(400, 'Showtime not found');
+          eventTitle = show.title;
           times = { start: show.starts_at.toISOString(), end: show.ends_at.toISOString() };
+          if (
+            (body.start !== undefined || body.end !== undefined) &&
+            (Date.parse(body.start ?? '') !== +show.starts_at ||
+              Date.parse(body.end ?? '') !== +show.ends_at)
+          )
+            fail(409, 'Event time changed. Review the updated schedule before confirming.');
         } else {
           if (body.showId) fail(400, 'Events are only available for cinemas and stadiums');
           times = intervalSchema.parse(body);
@@ -406,7 +510,7 @@ export async function createApp(config: {
           bookings.push(
             (
               await client.query(
-                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency,seat_location) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING ${bookingColumns}`,
+                `INSERT INTO bookings AS b(id,venue_id,resource_id,guest_name,starts_at,ends_at,show_id,party_size,price,currency,seat_location,event_title) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING ${bookingColumns}`,
                 [
                   randomUUID(),
                   body.venueId,
@@ -422,6 +526,7 @@ export async function createApp(config: {
                   ),
                   layout.pricing.currency,
                   seatLocation(resources.find((r) => r.id === id)!),
+                  eventTitle,
                 ],
               )
             ).rows[0],

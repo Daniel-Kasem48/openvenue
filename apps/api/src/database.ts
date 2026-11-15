@@ -64,12 +64,17 @@ export async function initialize(pool: Pool) {
     new URL('../migrations/004_event_seat_blocks.sql', import.meta.url),
     'utf8',
   );
+  const eventsSql = await readFile(
+    new URL('../migrations/005_event_management.sql', import.meta.url),
+    'utf8',
+  );
   await transaction(pool, async (client) => {
     await client.query('SELECT pg_advisory_xact_lock(745921)');
     await client.query(sql);
     await client.query(partySizeSql);
     await client.query(pricingSql);
     await client.query(blocksSql);
+    await client.query(eventsSql);
     if ((await client.query('SELECT id FROM venues LIMIT 1')).rowCount) return;
     for (const [kind, name] of [
       ['restaurant', 'The Greenhouse'],
@@ -90,13 +95,16 @@ export async function initialize(pool: Pool) {
         const start = new Date();
         start.setDate(start.getDate() + 1);
         start.setHours(19, 0, 0, 0);
-        await client.query('INSERT INTO shows VALUES($1,$2,$3,$4,$5)', [
-          randomUUID(),
-          id,
-          kind === 'stadium' ? 'Community Cup · sample match' : 'A night at the movies',
-          start,
-          new Date(+start + 7200000),
-        ]);
+        await client.query(
+          'INSERT INTO shows(id,venue_id,title,starts_at,ends_at) VALUES($1,$2,$3,$4,$5)',
+          [
+            randomUUID(),
+            id,
+            kind === 'stadium' ? 'Community Cup · sample match' : 'A night at the movies',
+            start,
+            new Date(+start + 7200000),
+          ],
+        );
       }
     }
   });

@@ -17,7 +17,7 @@ export function Modal({
     ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   }, []);
   return (
-    <dialog className={className} ref={ref} onCancel={onClose}>
+    <dialog aria-label={title} className={className} ref={ref} onCancel={onClose}>
       <div className="modal-head mb-4 flex items-center justify-between gap-4">
         <h2 className="text-xl">{title}</h2>
         <button
